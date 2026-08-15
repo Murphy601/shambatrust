@@ -1,0 +1,7 @@
+export const ELDER_CONSENT_TEXT_EN = `I understand that by submitting this review request, a vetted ShambaTrust partner advocate may view my vault details and uploaded title-deed / identity documents solely to prepare and seal my estate documents. Access is limited to the assigned advocate, is view-only (no download), is logged, and ends when my vault is sealed. I consent under Kenya’s Data Protection Act.`;
+
+export const ELDER_CONSENT_TEXT_SW = `Ninaelewa kwamba kwa kuwasilisha ombi hili, wakili mshirika wa ShambaTrust anaweza kuona maelezo ya hifadhi yangu na hati nilizopakia ili kuandaa na kuthibitisha nyaraka zangu za urithi. Ufikiaji ni kwa wakili aliyepangiwa tu, ni wa kuona tu (hakuna kupakua), unaandikwa kumbukumbu, na unaisha hifadhi ikifungwa. Ninakubali chini ya Sheria ya Ulinzi wa Data ya Kenya.`;
+
+export const ADVOCATE_SLA_NOTICE_EN = `Partner advocate SLA: You receive a pre-packaged brief under NDA / Law Society of Kenya professional duties and the Data Protection Act. View documents only for this assigned case. No downloads, no sharing outside the matter, no bulk export. Access ends automatically when the vault is sealed. Breach may terminate network membership and trigger legal remedies.`;
+
+export const ADVOCATE_SLA_NOTICE_SW = `Makubaliano ya wakili: Unapokea muhtasari chini ya siri ya kitaaluma (LSK) na Sheria ya Ulinzi wa Data. Angalia nyaraka kwa kesi hii tu. Hakuna kupakua, hakuna kushiriki nje ya kesi, hakuna kutoa wingi. Ufikiaji unaisha hifadhi ikifungwa. Ukiukaji unaweza kukomesha ushirikiano na kuleta hatua za kisheria.`;

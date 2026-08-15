@@ -1,0 +1,143 @@
+-- ShambaTrust Phase 2+3 schema (PostgreSQL / Supabase)
+-- Local app currently uses .data/db.json; migrate here when ready.
+
+create extension if not exists "pgcrypto";
+
+create type user_role as enum ('elder', 'agent', 'advocate');
+create type asset_type as enum (
+  'land', 'commercial_plot', 'business', 'vehicle', 'bank_account', 'other'
+);
+create type vault_status as enum ('draft', 'pending_review', 'in_review', 'sealed');
+create type package_tier as enum ('vault', 'standard', 'premium');
+create type legal_doc_type as enum ('will', 'land_trust', 'poa');
+create type legal_doc_status as enum ('draft', 'ready_for_sign', 'signed', 'certified');
+
+create table profiles (
+  id uuid primary key default gen_random_uuid(),
+  phone text unique not null,
+  full_name text not null,
+  role user_role not null default 'elder',
+  locale text not null default 'en',
+  advocate_license text,
+  created_at timestamptz not null default now()
+);
+
+create table vaults (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references profiles(id) on delete cascade,
+  status vault_status not null default 'draft',
+  package_tier package_tier,
+  binder_requested boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table assets (
+  id uuid primary key default gen_random_uuid(),
+  vault_id uuid not null references vaults(id) on delete cascade,
+  type asset_type not null,
+  title text not null,
+  notes text,
+  document_path text,
+  title_number text,
+  county text,
+  sub_county text,
+  landmark text,
+  gps_lat double precision,
+  gps_lng double precision,
+  registration_number text,
+  make_model text,
+  year text,
+  bank_name text,
+  account_number text,
+  account_type text,
+  business_reg_number text,
+  kra_pin text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table beneficiaries (
+  id uuid primary key default gen_random_uuid(),
+  vault_id uuid not null references vaults(id) on delete cascade,
+  full_name text not null,
+  id_number text,
+  phone text,
+  relationship text not null,
+  created_at timestamptz not null default now()
+);
+
+create table allocations (
+  id uuid primary key default gen_random_uuid(),
+  vault_id uuid not null references vaults(id) on delete cascade,
+  beneficiary_id uuid not null references beneficiaries(id) on delete cascade,
+  asset_id uuid references assets(id) on delete set null,
+  percentage numeric(5,2),
+  specific_gift text,
+  created_at timestamptz not null default now()
+);
+
+create table agent_links (
+  id uuid primary key default gen_random_uuid(),
+  vault_id uuid not null references vaults(id) on delete cascade,
+  elder_user_id uuid not null references profiles(id) on delete cascade,
+  agent_user_id uuid references profiles(id),
+  agent_phone text not null,
+  status text not null check (status in ('pending', 'active', 'revoked')),
+  created_at timestamptz not null default now()
+);
+
+create table review_requests (
+  id uuid primary key default gen_random_uuid(),
+  vault_id uuid not null references vaults(id) on delete cascade,
+  package_tier package_tier not null,
+  consult_mode text not null,
+  notes text,
+  status text not null default 'submitted',
+  advocate_id uuid references profiles(id),
+  assigned_at timestamptz,
+  completed_at timestamptz,
+  consult_scheduled_at timestamptz,
+  consult_notes text,
+  checklist jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table legal_documents (
+  id uuid primary key default gen_random_uuid(),
+  review_request_id uuid not null references review_requests(id) on delete cascade,
+  vault_id uuid not null references vaults(id) on delete cascade,
+  type legal_doc_type not null,
+  status legal_doc_status not null default 'draft',
+  title text not null,
+  body text,
+  document_name text,
+  document_path text,
+  signature_name text,
+  signed_at timestamptz,
+  signed_by_user_id uuid references profiles(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table title_lookups (
+  id uuid primary key default gen_random_uuid(),
+  vault_id uuid not null references vaults(id) on delete cascade,
+  asset_id uuid references assets(id) on delete set null,
+  title_number text not null,
+  county text,
+  result jsonb not null,
+  requested_by_user_id uuid not null references profiles(id),
+  created_at timestamptz not null default now()
+);
+
+create table audit_log (
+  id uuid primary key default gen_random_uuid(),
+  vault_id uuid not null references vaults(id) on delete cascade,
+  actor_user_id uuid not null references profiles(id),
+  action text not null,
+  detail text,
+  created_at timestamptz not null default now()
+);
+
+-- Enable RLS in Supabase and add owner/agent/advocate policies before production use.

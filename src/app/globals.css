@@ -1,0 +1,244 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #eef3ee;
+  --bg-deep: #dfe8df;
+  --ink: #121a14;
+  --ink-muted: #3a463d;
+  --forest: #1f4d3a;
+  --forest-deep: #163528;
+  --brass: #8b5e24;
+  --brass-soft: #c9a46a;
+  --soil: #4a3428;
+  --surface: #ffffff;
+  --border: #b9c7bb;
+  --danger: #8b2e2e;
+  --warning: #8a5a12;
+  --success: #1f4d3a;
+  --hero-overlay: rgba(14, 28, 20, 0.42);
+  --pattern: rgba(31, 77, 58, 0.06);
+}
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--ink);
+  --color-ink: var(--ink);
+  --color-forest: var(--forest);
+  --color-forest-deep: var(--forest-deep);
+  --color-brass: var(--brass);
+  --color-brass-soft: var(--brass-soft);
+  --color-soil: var(--soil);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-muted: var(--ink-muted);
+  --color-bg-deep: var(--bg-deep);
+  --font-sans: var(--font-source-sans);
+  --font-display: var(--font-fraunces);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-source-sans), "Segoe UI", sans-serif;
+  font-size: 1.125rem;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+.brand-font {
+  font-family: var(--font-fraunces), Georgia, serif;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--forest) 28%, white);
+}
+
+.site-shell {
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(circle at 12% 18%, var(--pattern) 0, transparent 42%),
+    radial-gradient(circle at 88% 8%, rgba(139, 94, 36, 0.08) 0, transparent 36%),
+    linear-gradient(180deg, #f5f8f4 0%, var(--bg) 38%, #e7efe8 100%);
+}
+
+.section {
+  width: min(1120px, calc(100% - 2rem));
+  margin-inline: auto;
+}
+
+.fade-up {
+  animation: fadeUp 0.7s ease both;
+}
+
+.fade-up-delay {
+  animation: fadeUp 0.8s ease 0.12s both;
+}
+
+.fade-up-delay-2 {
+  animation: fadeUp 0.85s ease 0.22s both;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes auditIn {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.audit-step {
+  animation: auditIn 0.35s ease both;
+}
+
+.hero-media {
+  animation: gentleZoom 18s ease-in-out infinite alternate;
+}
+
+@keyframes gentleZoom {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.06);
+  }
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 3.25rem;
+  padding: 0.85rem 1.4rem;
+  border-radius: 0.35rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn-primary {
+  background: var(--forest);
+  color: #f7faf7;
+}
+
+.btn-primary:hover {
+  background: var(--forest-deep);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: #f4f7f4;
+  border-color: rgba(244, 247, 244, 0.75);
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.btn-secondary-dark {
+  background: var(--surface);
+  color: var(--forest-deep);
+  border-color: var(--border);
+}
+
+.btn-secondary-dark:hover {
+  border-color: var(--forest);
+}
+
+.btn-whatsapp {
+  background: #146c43;
+  color: #f4faf6;
+}
+
+.btn-whatsapp:hover {
+  background: #0f5635;
+}
+
+.btn-brass {
+  background: var(--brass);
+  color: #fffdf8;
+}
+
+.btn-brass:hover {
+  background: #734c1a;
+}
+
+.field {
+  width: 100%;
+  min-height: 3.25rem;
+  padding: 0.85rem 1rem;
+  border: 2px solid var(--border);
+  border-radius: 0.35rem;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.field:focus {
+  outline: 3px solid color-mix(in srgb, var(--forest) 35%, white);
+  border-color: var(--forest);
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .fade-up,
+  .fade-up-delay,
+  .fade-up-delay-2,
+  .audit-step,
+  .hero-media {
+    animation: none;
+  }
+}
