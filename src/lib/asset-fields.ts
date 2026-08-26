@@ -1,8 +1,38 @@
-import type { Asset, AssetType } from "@/lib/db/types";
+import type { Asset, AssetType, SaccoNominee } from "@/lib/db/types";
 import type { Locale } from "@/lib/dictionaries";
 
 export function isLandLike(type: AssetType): boolean {
   return type === "land" || type === "commercial_plot";
+}
+
+/** Total of the nominee shares; SACCO bylaws expect this to reach 100. */
+export function nomineeTotal(nominees: SaccoNominee[]): number {
+  return nominees.reduce((sum, nominee) => sum + (nominee.percentage || 0), 0);
+}
+
+/**
+ * ArdhiSasa parcel identifiers in the order the registry search expects them.
+ * Returns an empty list for non-land assets.
+ */
+export function parcelIdentifiers(
+  asset: Asset,
+  locale: Locale = "en",
+): Array<{ label: string; value: string }> {
+  if (!isLandLike(asset.type)) return [];
+  const sw = locale === "sw";
+  return [
+    { label: sw ? "Nambari ya hati (LR)" : "Title / LR number", value: asset.titleNumber },
+    { label: sw ? "Nambari ya kiwanja" : "Parcel number", value: asset.parcelNumber },
+    { label: sw ? "Nambari ya block" : "Block number", value: asset.blockNumber },
+    {
+      label: sw ? "Sehemu ya usajili" : "Registration section",
+      value: asset.registrationSection,
+    },
+    {
+      label: sw ? "Ofisi ya ardhi ya kaunti" : "County land registry",
+      value: asset.landRegistryOffice,
+    },
+  ].filter((row) => row.value.trim().length > 0);
 }
 
 export function assetSummary(asset: Asset, locale: Locale = "en"): string {
@@ -13,6 +43,16 @@ export function assetSummary(asset: Asset, locale: Locale = "en"): string {
           ? `Hati: ${asset.titleNumber}`
           : `Title: ${asset.titleNumber}`
         : null,
+      asset.blockNumber
+        ? locale === "sw"
+          ? `Block: ${asset.blockNumber}`
+          : `Block: ${asset.blockNumber}`
+        : null,
+      asset.parcelNumber
+        ? locale === "sw"
+          ? `Kiwanja: ${asset.parcelNumber}`
+          : `Parcel: ${asset.parcelNumber}`
+        : null,
       asset.county,
       asset.subCounty,
       asset.landmark
@@ -22,6 +62,25 @@ export function assetSummary(asset: Asset, locale: Locale = "en"): string {
         : null,
     ].filter(Boolean);
     return parts.join(" · ") || (locale === "sw" ? "Ardhi" : "Land asset");
+  }
+
+  if (asset.type === "sacco") {
+    const nominees = asset.saccoNominees.length;
+    const parts = [
+      asset.saccoName,
+      asset.saccoMemberNumber
+        ? locale === "sw"
+          ? `Mwanachama: ${asset.saccoMemberNumber}`
+          : `Member: ${asset.saccoMemberNumber}`
+        : null,
+      nominees
+        ? locale === "sw"
+          ? `Wateule ${nominees} (${nomineeTotal(asset.saccoNominees)}%)`
+          : `${nominees} nominee${nominees === 1 ? "" : "s"} (${nomineeTotal(asset.saccoNominees)}%)`
+        : null,
+      asset.mpesaNumber ? `M-Pesa ${maskAccount(asset.mpesaNumber)}` : null,
+    ].filter(Boolean);
+    return parts.join(" · ") || (locale === "sw" ? "SACCO" : "SACCO account");
   }
 
   if (asset.type === "vehicle") {
@@ -81,11 +140,13 @@ export function uploadLabel(type: AssetType, locale: Locale): string {
     if (type === "vehicle") return "Pakia logbook / kitambulisho cha gari";
     if (type === "bank_account") return "Pakia taarifa ya benki (si lazima)";
     if (type === "business") return "Pakia cheti cha biashara";
+    if (type === "sacco") return "Pakia fomu ya uteuzi wa SACCO (si lazima)";
     return "Pakia hati (si lazima)";
   }
   if (isLandLike(type)) return "Upload title deed photo";
   if (type === "vehicle") return "Upload logbook / vehicle ID";
   if (type === "bank_account") return "Upload bank statement (optional)";
   if (type === "business") return "Upload business registration certificate";
+  if (type === "sacco") return "Upload SACCO nomination form (optional)";
   return "Upload supporting document (optional)";
 }

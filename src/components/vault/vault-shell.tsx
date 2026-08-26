@@ -9,10 +9,12 @@ const links = [
   { href: "/vault", key: "vault" as const },
   { href: "/vault/assets", key: "assets" as const },
   { href: "/vault/heirs", key: "heirs" as const },
+  { href: "/vault/testament", key: "testament" as const },
   { href: "/vault/agent", key: "agent" as const },
   { href: "/vault/review", key: "review" as const },
   { href: "/vault/execution", key: "execution" as const },
   { href: "/vault/succession", key: "succession" as const },
+  { href: "/vault/released", key: "released" as const },
 ];
 
 export function VaultShell({

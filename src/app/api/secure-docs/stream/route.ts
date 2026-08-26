@@ -48,6 +48,8 @@ export async function GET(request: Request) {
   let target;
   if (kind === "death_cert") {
     target = { kind: "death_cert" as const, caseId: caseId || "" };
+  } else if (kind === "death_notification") {
+    target = { kind: "death_notification" as const, caseId: caseId || "" };
   } else if (kind === "asset" && vaultId && !reviewId && session.role === "admin") {
     target = {
       kind: "asset_admin" as const,

@@ -6,6 +6,7 @@ import { PDFDocument as PdfLibDocument } from "pdf-lib";
 import type {
   Allocation,
   Asset,
+  AudioTestament,
   Beneficiary,
   ExecutionPlan,
   LegalDocument,
@@ -25,6 +26,7 @@ import {
   getReviewRequest,
   listAllocations,
   listAssets,
+  listAudioTestaments,
   listAudit,
   listBeneficiaries,
   listLegalDocumentsForReview,
@@ -34,6 +36,8 @@ import {
   getVaultById,
   getVaultBinder,
 } from "@/lib/db/store";
+import { spokenLanguageLabel } from "@/lib/languages";
+import { registerBinderFonts } from "@/lib/binder/fonts";
 
 type Snapshot = {
   vault: Vault;
@@ -46,6 +50,7 @@ type Snapshot = {
   documents: LegalDocument[];
   lookups: TitleLookupRecord[];
   plan: ExecutionPlan | null;
+  testaments: AudioTestament[];
   auditLines: string[];
   sealedAt: string;
   version: number;
@@ -112,6 +117,8 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
       },
     });
 
+    const fonts = registerBinderFonts(doc);
+
     const chunks: Buffer[] = [];
     doc.on("data", (c) => chunks.push(c));
     doc.on("error", reject);
@@ -121,25 +128,25 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
 
     const h = (text: string) => {
       doc.moveDown(0.6);
-      doc.font("Helvetica-Bold").fontSize(14).fillColor("#1a3a28").text(text);
+      doc.font(fonts.bold).fontSize(14).fillColor("#1a3a28").text(text);
       doc.moveDown(0.3);
-      doc.font("Helvetica").fontSize(10).fillColor("#222222");
+      doc.font(fonts.regular).fontSize(10).fillColor("#222222");
     };
 
     const line = (label: string, value: string) => {
       doc
-        .font("Helvetica-Bold")
+        .font(fonts.bold)
         .text(`${label}: `, { continued: true })
-        .font("Helvetica")
+        .font(fonts.regular)
         .text(value || "—");
     };
 
     // Cover
-    doc.font("Helvetica-Bold").fontSize(22).fillColor("#1a3a28").text("ShambaTrust");
+    doc.font(fonts.bold).fontSize(22).fillColor("#1a3a28").text("ShambaTrust");
     doc.moveDown(0.3);
     doc.fontSize(16).text("Sealed Vault Binder");
     doc.moveDown(0.8);
-    doc.font("Helvetica").fontSize(11).fillColor("#333333");
+    doc.font(fonts.regular).fontSize(11).fillColor("#333333");
     line("Elder", snapshot.owner.fullName);
     line("Phone", snapshot.owner.phone);
     if (snapshot.owner.email) line("Email", snapshot.owner.email);
@@ -153,7 +160,7 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
     }
     doc.moveDown(1);
     doc
-      .font("Helvetica-Oblique")
+      .font(fonts.oblique)
       .fontSize(9)
       .fillColor("#555555")
       .text(
@@ -178,16 +185,40 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
     }
     for (const [i, asset] of snapshot.assets.entries()) {
       doc.moveDown(0.4);
-      doc.font("Helvetica-Bold").text(`${i + 1}. ${asset.title} (${asset.type})`);
-      doc.font("Helvetica");
+      doc.font(fonts.bold).text(`${i + 1}. ${asset.title} (${asset.type})`);
+      doc.font(fonts.regular);
       if (asset.titleNumber) line("Title number", asset.titleNumber);
+      if (asset.parcelNumber) line("Parcel number", asset.parcelNumber);
+      if (asset.blockNumber) line("Block number", asset.blockNumber);
+      if (asset.registrationSection) {
+        line("Registration section", asset.registrationSection);
+      }
+      if (asset.landRegistryOffice) {
+        line("County land registry", asset.landRegistryOffice);
+      }
       if (asset.county) line("County", asset.county);
       if (asset.subCounty) line("Sub-county", asset.subCounty);
       if (asset.landmark) line("Landmark", asset.landmark);
+      if (asset.gpsLat != null && asset.gpsLng != null) {
+        line("GPS pin", `${asset.gpsLat}, ${asset.gpsLng}`);
+      }
       if (asset.registrationNumber) line("Registration", asset.registrationNumber);
       if (asset.makeModel) line("Make/model", asset.makeModel);
       if (asset.bankName) line("Bank", `${asset.bankName} ${asset.accountNumber}`.trim());
       if (asset.businessRegNumber) line("Business reg", asset.businessRegNumber);
+      if (asset.saccoName) line("SACCO", asset.saccoName);
+      if (asset.saccoMemberNumber) line("SACCO member", asset.saccoMemberNumber);
+      if (asset.mpesaNumber) line("Linked M-Pesa", asset.mpesaNumber);
+      if (asset.saccoNominees.length > 0) {
+        doc.font(fonts.bold).text("SACCO nominees (paid outside the estate)");
+        doc.font(fonts.regular);
+        for (const nominee of asset.saccoNominees) {
+          doc.text(
+            `• ${nominee.fullName}${nominee.relationship ? ` (${nominee.relationship})` : ""} — ${nominee.percentage}%` +
+              (nominee.idNumber ? ` · ID ${nominee.idNumber}` : ""),
+          );
+        }
+      }
       if (asset.notes) line("Notes", asset.notes);
       if (asset.documentName) line("Attached deed", asset.documentName);
     }
@@ -201,9 +232,9 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
     for (const [i, heir] of snapshot.beneficiaries.entries()) {
       doc.moveDown(0.3);
       doc
-        .font("Helvetica-Bold")
+        .font(fonts.bold)
         .text(`${i + 1}. ${heir.fullName}`)
-        .font("Helvetica");
+        .font(fonts.regular);
       line("Relationship", heir.relationship);
       line("ID number", heir.idNumber || "—");
       line("Phone", heir.phone || "—");
@@ -240,16 +271,37 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
         String(snapshot.plan.minTrusteeApprovals),
       );
       line(
+        "Min guardian confirmations",
+        String(snapshot.plan.minGuardianApprovals),
+      );
+      line(
         "Death certificate required",
         snapshot.plan.requireDeathCertificate ? "Yes" : "No",
       );
+      line(
+        "Death notification required",
+        snapshot.plan.requireDeathNotification ? "Yes" : "No",
+      );
       line("Cooling hours", String(snapshot.plan.coolingHours));
       doc.moveDown(0.3);
-      doc.font("Helvetica-Bold").text("Trustees");
-      doc.font("Helvetica");
+      doc.font(fonts.bold).text("Trustees");
+      doc.font(fonts.regular);
       for (const t of snapshot.plan.trustees || []) {
         doc.text(
           `• ${t.fullName} · ${t.phone || "—"}${t.idNumber ? ` · ID ${t.idNumber}` : ""}`,
+        );
+      }
+      doc.moveDown(0.3);
+      doc.font(fonts.bold).text("Guardians (dual verification)");
+      doc.font(fonts.regular);
+      if ((snapshot.plan.guardians || []).length === 0) {
+        doc.text("None named.");
+      }
+      for (const g of snapshot.plan.guardians || []) {
+        doc.text(
+          `• ${g.fullName} · ${g.phone || "—"}${g.relationship ? ` · ${g.relationship}` : ""}${
+            g.idNumber ? ` · ID ${g.idNumber}` : ""
+          }`,
         );
       }
     }
@@ -268,8 +320,8 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
     );
     if (snapshot.review.notes) line("Elder notes", snapshot.review.notes);
     doc.moveDown(0.3);
-    doc.font("Helvetica-Bold").text("Checklist");
-    doc.font("Helvetica");
+    doc.font(fonts.bold).text("Checklist");
+    doc.font(fonts.regular);
     for (const item of snapshot.review.checklist || []) {
       doc.text(`${item.done ? "[x]" : "[ ]"} ${item.label}`);
     }
@@ -283,9 +335,21 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
     for (const d of snapshot.documents) {
       doc.moveDown(0.5);
       doc
-        .font("Helvetica-Bold")
+        .font(fonts.bold)
         .text(`${d.title} (${d.type}) — ${d.status}`)
-        .font("Helvetica");
+        .font(fonts.regular);
+      if (d.stampRef) {
+        line(
+          "Legal stamp",
+          `${d.stampRef} · ${d.stampAdvocateName || "—"}` +
+            (d.stampLskNumber ? ` · LSK ${d.stampLskNumber}` : "") +
+            (d.stampCounty ? ` · ${d.stampCounty}` : "") +
+            (d.stampedAt
+              ? ` · ${new Date(d.stampedAt).toLocaleString("en-KE")}`
+              : ""),
+        );
+        if (d.stampNotes) line("Stamp annotation", d.stampNotes);
+      }
       if (d.signatureName) {
         line("Signed by", `${d.signatureName} at ${d.signedAt || "—"}`);
       }
@@ -314,9 +378,45 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
       if (lookup.result?.ownerName) line("Registry owner", lookup.result.ownerName);
     }
 
+    // Voice testaments
+    h("9. Voice testaments");
+    if (snapshot.testaments.length === 0) {
+      doc.text("No spoken statements recorded.");
+    }
+    for (const testament of snapshot.testaments) {
+      doc.moveDown(0.4);
+      doc
+        .font(fonts.bold)
+        .text(`${testament.title} (${spokenLanguageLabel(testament.language)})`)
+        .font(fonts.regular);
+      line(
+        "Recorded",
+        `${new Date(testament.createdAt).toLocaleString("en-KE")}${
+          testament.recordedByAgent ? " · captured by family agent" : ""
+        }`,
+      );
+      line("Transcript status", testament.transcriptStatus.replace(/_/g, " "));
+      if (testament.transcript.trim()) {
+        doc.moveDown(0.2);
+        doc.fontSize(9).text(testament.transcript.trim());
+        doc.fontSize(10);
+      }
+    }
+    doc
+      .moveDown(0.4)
+      .font(fonts.oblique)
+      .fontSize(9)
+      .fillColor("#555555")
+      .text(
+        "Recordings evidence the testator's spoken intent. They support, and do not replace, the certified instruments above.",
+      )
+      .font(fonts.regular)
+      .fontSize(10)
+      .fillColor("#222222");
+
     // Seal attestation
     doc.addPage();
-    h("9. Seal attestation");
+    h("10. Seal attestation");
     line("Sealed at", new Date(snapshot.sealedAt).toLocaleString("en-KE"));
     line("Advocate", snapshot.advocateName);
     if (snapshot.advocate?.advocateLicense) {
@@ -324,8 +424,8 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
     }
     line("Vault status", snapshot.vault.status);
     doc.moveDown(0.5);
-    doc.font("Helvetica-Bold").text("Recent audit (excerpt)");
-    doc.font("Helvetica").fontSize(9);
+    doc.font(fonts.bold).text("Recent audit (excerpt)");
+    doc.font(fonts.regular).fontSize(9);
     for (const row of snapshot.auditLines) {
       doc.text(`• ${row}`);
     }
@@ -334,11 +434,11 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
     // Embedded images appendix
     if (imageAttachments.length > 0) {
       doc.addPage();
-      h("10. Embedded identity & deed images");
+      h("11. Embedded identity & deed images");
       for (const att of imageAttachments) {
         doc.moveDown(0.4);
-        doc.font("Helvetica-Bold").text(att.label);
-        doc.font("Helvetica");
+        doc.font(fonts.bold).text(att.label);
+        doc.font(fonts.regular);
         try {
           const maxWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
           const maxHeight = 360;
@@ -405,6 +505,7 @@ async function buildSnapshot(input: {
     documents,
     lookups,
     plan,
+    testaments,
     audit,
   ] = await Promise.all([
     listAssets(input.vaultId),
@@ -413,6 +514,7 @@ async function buildSnapshot(input: {
     listLegalDocumentsForReview(input.reviewRequestId),
     listTitleLookups(input.vaultId),
     getExecutionPlan(input.vaultId),
+    listAudioTestaments(input.vaultId),
     listAudit(input.vaultId),
   ]);
 
@@ -427,6 +529,7 @@ async function buildSnapshot(input: {
     documents,
     lookups,
     plan,
+    testaments,
     auditLines: audit.slice(0, 25).map(
       (a) =>
         `${new Date(a.createdAt).toLocaleString("en-KE")} — ${a.action}: ${a.detail}`,

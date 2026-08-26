@@ -1,0 +1,52 @@
+name: Deploy to Cloudflare Workers
+
+on:
+  push:
+    branches:
+      - main
+      - cursor/shambatrust-enterprise-features-b3d4
+  workflow_dispatch:
+
+concurrency:
+  group: cloudflare-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Cloudflare credentials
+        id: cf
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CLOUDFLARE_API_TOKEN is not set. Add GitHub Actions secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID, or connect this repo in Cloudflare Workers Builds (build: npx opennextjs-cloudflare build, deploy: npx opennextjs-cloudflare deploy -- --keep-vars)."
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.cf.outputs.ready == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        if: steps.cf.outputs.ready == 'true'
+        run: npm ci
+
+      - name: Build and deploy to Cloudflare
+        if: steps.cf.outputs.ready == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+          OPS_ADMIN_PHONES: ${{ secrets.OPS_ADMIN_PHONES }}
+        run: npx opennextjs-cloudflare build && npx opennextjs-cloudflare deploy -- --keep-vars

@@ -4,10 +4,12 @@ import { FloatingWhatsApp } from "@/components/floating-whatsapp";
 import { Hero } from "@/components/hero";
 import { HowItWorks } from "@/components/how-it-works";
 import { LeadCapture } from "@/components/lead-capture";
+import { OnboardingJourney } from "@/components/onboarding-journey";
 import { Pricing } from "@/components/pricing";
 import { ProblemSolution } from "@/components/problem-solution";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { SuccessStories } from "@/components/success-stories";
 import { TrustSignals } from "@/components/trust-signals";
 
 export default function Home() {
@@ -18,6 +20,8 @@ export default function Home() {
         <Hero />
         <ProblemSolution />
         <HowItWorks />
+        <OnboardingJourney />
+        <SuccessStories />
         <FamilyPeaceAudit />
         <TrustSignals />
         <Pricing />

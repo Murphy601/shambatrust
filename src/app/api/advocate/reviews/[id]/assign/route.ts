@@ -7,6 +7,7 @@ import {
   countAdvocateActiveCases,
   findUserById,
   getReviewRequest,
+  resolveAdvocateMatches,
 } from "@/lib/db/store";
 
 type Params = { params: Promise<{ id: string }> };
@@ -75,6 +76,9 @@ export async function POST(request: Request, { params }: Params) {
   if (!review) {
     return NextResponse.json({ error: "Could not assign." }, { status: 500 });
   }
+
+  // First claim wins; the other routing offers on this case expire.
+  await resolveAdvocateMatches(review.id, access.session.userId);
 
   await addAudit({
     vaultId: review.vaultId,

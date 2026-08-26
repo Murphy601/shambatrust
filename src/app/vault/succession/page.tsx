@@ -4,29 +4,65 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useLocale } from "@/components/locale-provider";
 import type { SuccessionCase } from "@/lib/db/types";
 
+type EligibleVault = {
+  vaultId: string;
+  ownerName: string;
+  reason: string;
+};
+
+/** Human labels for the confirmation stages, so filers know who is holding it up. */
+function stageCopy(status: string, sw: boolean): string {
+  switch (status) {
+    case "succession_filed":
+      return sw ? "Dai limewasilishwa" : "Claim filed";
+    case "awaiting_trustee_otps":
+      return sw ? "Inasubiri idhini za amana" : "Waiting for trustee approvals";
+    case "awaiting_guardian_confirmations":
+      return sw
+        ? "Inasubiri uthibitisho wa walezi wawili"
+        : "Waiting for two guardian confirmations";
+    case "pending_ops_verification":
+      return sw ? "Inasubiri uhakiki wa ShambaTrust" : "Waiting for ShambaTrust verification";
+    case "succession_verified":
+      return sw ? "Imethibitishwa — kipindi cha kusubiri" : "Verified — cooling period";
+    case "with_advocate":
+      return sw ? "Iko kwa wakili" : "With the advocate";
+    case "succession_completed":
+      return sw ? "Imekamilika" : "Completed";
+    case "succession_rejected":
+      return sw ? "Imekataliwa" : "Rejected";
+    default:
+      return status.replace(/_/g, " ");
+  }
+}
+
 export default function SuccessionPage() {
   const { locale } = useLocale();
+  const sw = locale === "sw";
+
   const [vaultId, setVaultId] = useState<string | null>(null);
-  const [eligible, setEligible] = useState<
-    Array<{ vaultId: string; ownerName: string; reason: string }>
-  >([]);
+  const [eligible, setEligible] = useState<EligibleVault[]>([]);
   const [cases, setCases] = useState<SuccessionCase[]>([]);
   const [deathDate, setDeathDate] = useState("");
   const [filerNotes, setFilerNotes] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  const [certificate, setCertificate] = useState<File | null>(null);
+  const [notification, setNotification] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Trustee approve
+  // Trustee / guardian confirmation
   const [approveCaseId, setApproveCaseId] = useState("");
+  const [approveRole, setApproveRole] = useState<"trustee" | "guardian" | null>(
+    null,
+  );
   const [devCode, setDevCode] = useState<string | null>(null);
   const [code, setCode] = useState("");
 
   const load = useCallback(async () => {
     const elig = await fetch("/api/succession/eligible");
     const eligData = await elig.json();
-    const vaults = eligData.vaults || [];
+    const vaults: EligibleVault[] = eligData.vaults || [];
     setEligible(vaults);
     if (vaults.length && !vaultId) {
       setVaultId(vaults[0].vaultId);
@@ -42,14 +78,16 @@ export default function SuccessionPage() {
   }, [vaultId]);
 
   useEffect(() => {
-    void load();
+    void (async () => {
+      await load();
+    })();
   }, [load]);
 
   async function fileClaim(event: FormEvent) {
     event.preventDefault();
     if (!vaultId) {
       setError(
-        locale === "sw"
+        sw
           ? "Hakuna hifadhi. Ingia kama mrithi, amana, au wakala."
           : "No vault linked. Sign in as an heir, trustee, or family agent.",
       );
@@ -63,7 +101,8 @@ export default function SuccessionPage() {
       form.set("vaultId", vaultId);
       form.set("deathDate", deathDate);
       form.set("filerNotes", filerNotes);
-      if (file) form.set("file", file);
+      if (certificate) form.set("file", certificate);
+      if (notification) form.set("notificationFile", notification);
       const res = await fetch("/api/succession/cases", {
         method: "POST",
         body: form,
@@ -71,11 +110,12 @@ export default function SuccessionPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not file");
       setMessage(
-        locale === "sw"
-          ? "Dai limetumwa. Amana wataidhinisha, kisha ops itakagua."
-          : "Claim filed. Trustees must approve, then ops will verify.",
+        sw
+          ? "Dai limetumwa. Amana na walezi wanapaswa kuthibitisha, kisha ops itakagua."
+          : "Claim filed. Trustees then guardians must confirm before ops verify it.",
       );
-      setFile(null);
+      setCertificate(null);
+      setNotification(null);
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not file");
@@ -84,9 +124,10 @@ export default function SuccessionPage() {
     }
   }
 
-  async function requestTrusteeCode(caseId: string) {
+  async function requestConfirmationCode(caseId: string) {
     setBusy(true);
     setError(null);
+    setMessage(null);
     setApproveCaseId(caseId);
     try {
       const me = await fetch("/api/auth/me");
@@ -100,20 +141,22 @@ export default function SuccessionPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not send code");
+      setApproveRole(data.role || null);
       setDevCode(data.devCode || null);
       setMessage(
-        locale === "sw"
+        sw
           ? "Msimbo umetumwa (au unaonekana chini katika hali ya majaribio)."
           : "Code sent (or shown below in dev mode).",
       );
     } catch (e) {
+      setApproveCaseId("");
       setError(e instanceof Error ? e.message : "Failed");
     } finally {
       setBusy(false);
     }
   }
 
-  async function confirmTrustee(event: FormEvent) {
+  async function confirm(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
     setError(null);
@@ -124,21 +167,19 @@ export default function SuccessionPage() {
       const res = await fetch("/api/succession/approve?action=confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          caseId: approveCaseId,
-          phone,
-          code,
-        }),
+        body: JSON.stringify({ caseId: approveCaseId, phone, code }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not approve");
+      if (!res.ok) throw new Error(data.error || "Could not confirm");
       setMessage(
-        locale === "sw"
-          ? `Idhini imehifadhiwa (${data.approvedCount}/${data.required}).`
-          : `Approval recorded (${data.approvedCount}/${data.required}).`,
+        sw
+          ? `Uthibitisho umehifadhiwa: amana ${data.trusteeApproved}/${data.trusteeRequired} · walezi ${data.guardianApproved}/${data.guardianRequired}.`
+          : `Confirmation recorded: trustees ${data.trusteeApproved}/${data.trusteeRequired} · guardians ${data.guardianApproved}/${data.guardianRequired}.`,
       );
       setCode("");
       setDevCode(null);
+      setApproveCaseId("");
+      setApproveRole(null);
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
@@ -151,12 +192,12 @@ export default function SuccessionPage() {
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-semibold text-forest-deep">
-          {locale === "sw" ? "Dai la mirathi" : "Succession claim"}
+          {sw ? "Kuanzisha mirathi" : "Succession activation"}
         </h1>
         <p className="mt-2 max-w-2xl text-lg text-muted">
-          {locale === "sw"
-            ? "Wasilisha cheti cha kifo ili kuanzisha mirathi. Ops itathibitisha kabla ya wakili."
-            : "File a death certificate to start succession. Ops must verify before an advocate takes over."}
+          {sw
+            ? "Wasilisha taarifa na cheti cha kifo ili kuanzisha mirathi. Amana huanzisha, walezi wawili huthibitisha, kisha ShambaTrust huhakiki kabla hifadhi kufunguliwa."
+            : "File the death notification and certificate to start succession. Trustees begin it, two guardians confirm it, and ShambaTrust verifies before the vault is opened to executors."}
         </p>
       </div>
 
@@ -168,18 +209,18 @@ export default function SuccessionPage() {
         className="space-y-4 rounded-[0.45rem] border-2 border-border bg-surface p-5 sm:p-7"
       >
         <h2 className="text-2xl font-semibold text-forest-deep">
-          {locale === "sw" ? "Wasilisha dai" : "File a claim"}
+          {sw ? "Wasilisha dai" : "File a claim"}
         </h2>
         {eligible.length === 0 ? (
           <p className="text-base text-muted">
-            {locale === "sw"
+            {sw
               ? "Hakuna hifadhi iliyofungwa unayoweza kuwasilisha dai. Lazima uwe amana, mrithi, au wakala kwenye hifadhi iliyofungwa."
               : "No sealed vault you can file against. You must be a trustee, heir, or agent on a sealed vault."}
           </p>
         ) : (
           <div>
             <label className="field-label" htmlFor="vaultPick">
-              {locale === "sw" ? "Hifadhi ya mzee" : "Elder vault"}
+              {sw ? "Hifadhi ya mzee" : "Elder vault"}
             </label>
             <select
               id="vaultPick"
@@ -197,7 +238,7 @@ export default function SuccessionPage() {
         )}
         <div>
           <label className="field-label" htmlFor="deathDate">
-            {locale === "sw" ? "Tarehe ya kifo" : "Date of death"}
+            {sw ? "Tarehe ya kifo" : "Date of death"}
           </label>
           <input
             id="deathDate"
@@ -209,20 +250,39 @@ export default function SuccessionPage() {
           />
         </div>
         <div>
+          <label className="field-label" htmlFor="notice">
+            {sw
+              ? "Taarifa rasmi ya kifo (fomu ya chifu / hospitali)"
+              : "Official death notification (chief's or hospital form)"}
+          </label>
+          <input
+            id="notice"
+            type="file"
+            accept=".pdf,image/*"
+            className="field"
+            onChange={(e) => setNotification(e.target.files?.[0] || null)}
+          />
+          <p className="mt-1 text-base text-muted">
+            {sw
+              ? "Hii hutolewa ndani ya siku chache baada ya kifo."
+              : "This is issued within a few days of the death, well before the certificate."}
+          </p>
+        </div>
+        <div>
           <label className="field-label" htmlFor="cert">
-            {locale === "sw" ? "Cheti cha kifo" : "Death certificate"}
+            {sw ? "Cheti cha kifo" : "Death certificate"}
           </label>
           <input
             id="cert"
             type="file"
             accept=".pdf,image/*"
             className="field"
-            onChange={(e) => setFile(e.target.files?.[0] || null)}
+            onChange={(e) => setCertificate(e.target.files?.[0] || null)}
           />
         </div>
         <div>
           <label className="field-label" htmlFor="notes">
-            {locale === "sw" ? "Maelezo" : "Notes"}
+            {sw ? "Maelezo" : "Notes"}
           </label>
           <textarea
             id="notes"
@@ -232,50 +292,78 @@ export default function SuccessionPage() {
           />
         </div>
         <button type="submit" className="btn btn-primary" disabled={busy || !vaultId}>
-          {busy ? "…" : locale === "sw" ? "Wasilisha dai" : "Submit claim"}
+          {busy ? "…" : sw ? "Wasilisha dai" : "Submit claim"}
         </button>
       </form>
 
       <section className="rounded-[0.45rem] border-2 border-border bg-surface p-5 sm:p-7">
         <h2 className="text-2xl font-semibold text-forest-deep">
-          {locale === "sw" ? "Madai yaliyopo" : "Existing claims"}
+          {sw ? "Madai yaliyopo" : "Existing claims"}
         </h2>
         {cases.length === 0 ? (
           <p className="mt-3 text-lg text-muted">
-            {locale === "sw" ? "Hakuna dai bado." : "No claims yet."}
+            {sw ? "Hakuna dai bado." : "No claims yet."}
           </p>
         ) : (
-          <ul className="mt-4 space-y-4">
+          <ul className="mt-4 space-y-5">
             {cases.map((c) => (
               <li key={c.id} className="border-l-4 border-forest pl-3">
-                <p className="text-lg font-semibold capitalize text-ink">
-                  {c.status.replace(/_/g, " ")}
+                <p className="text-lg font-semibold text-ink">
+                  {stageCopy(c.status, sw)}
                 </p>
                 <p className="text-base text-muted">
-                  Death: {c.deathDate} · Filed{" "}
+                  {sw ? "Kifo" : "Death"}: {c.deathDate} ·{" "}
+                  {sw ? "Imewasilishwa" : "Filed"}{" "}
                   {new Date(c.createdAt).toLocaleString()}
                 </p>
-                {c.deathCertificatePath && (
-                  <a
-                    className="mt-1 inline-block font-semibold text-forest underline"
-                    href={`/api/secure-docs/view?kind=death_cert&caseId=${c.id}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {locale === "sw" ? "Angalia cheti (kuona tu)" : "View certificate (view only)"}
-                  </a>
-                )}
+
+                <div className="mt-2 flex flex-wrap gap-4">
+                  {c.deathNotificationPath && (
+                    <a
+                      className="font-semibold text-forest underline"
+                      href={`/api/secure-docs/view?kind=death_notification&caseId=${c.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {sw ? "Angalia taarifa ya kifo" : "View death notification"}
+                    </a>
+                  )}
+                  {c.deathCertificatePath && (
+                    <a
+                      className="font-semibold text-forest underline"
+                      href={`/api/secure-docs/view?kind=death_cert&caseId=${c.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {sw ? "Angalia cheti (kuona tu)" : "View certificate (view only)"}
+                    </a>
+                  )}
+                </div>
+
+                {c.vaultReleasedAt ? (
+                  <p className="mt-3 rounded-[0.35rem] border-2 border-forest bg-[color-mix(in_srgb,var(--forest)_10%,white)] px-3 py-2 text-base font-semibold text-forest-deep">
+                    {sw
+                      ? `Hifadhi ilifunguliwa kwa watekelezaji ${new Date(c.vaultReleasedAt).toLocaleString()}.`
+                      : `Vault released to executors on ${new Date(c.vaultReleasedAt).toLocaleString()}.`}
+                  </p>
+                ) : null}
+
                 {(c.status === "awaiting_trustee_otps" ||
+                  c.status === "awaiting_guardian_confirmations" ||
                   c.status === "succession_filed") && (
                   <button
                     type="button"
                     className="btn btn-secondary-dark mt-3"
                     disabled={busy}
-                    onClick={() => requestTrusteeCode(c.id)}
+                    onClick={() => void requestConfirmationCode(c.id)}
                   >
-                    {locale === "sw"
-                      ? "Idhinisha kama amana (OTP)"
-                      : "Approve as trustee (OTP)"}
+                    {c.status === "awaiting_guardian_confirmations"
+                      ? sw
+                        ? "Thibitisha kama mlezi (OTP)"
+                        : "Confirm as guardian (OTP)"
+                      : sw
+                        ? "Idhinisha kama amana (OTP)"
+                        : "Approve as trustee (OTP)"}
                   </button>
                 )}
               </li>
@@ -286,26 +374,37 @@ export default function SuccessionPage() {
 
       {approveCaseId && (
         <form
-          onSubmit={confirmTrustee}
+          onSubmit={confirm}
           className="space-y-3 rounded-[0.45rem] border-2 border-brass bg-surface p-5"
         >
-          <h3 className="text-xl font-semibold text-forest-deep">
-            {locale === "sw" ? "Thibitisha OTP ya amana" : "Confirm trustee OTP"}
-          </h3>
+          <h2 className="text-xl font-semibold text-forest-deep">
+            {approveRole === "guardian"
+              ? sw
+                ? "Thibitisha OTP ya mlezi"
+                : "Confirm guardian OTP"
+              : sw
+                ? "Thibitisha OTP ya amana"
+                : "Confirm trustee OTP"}
+          </h2>
           {devCode && (
             <p className="text-lg font-semibold text-soil">
               Dev code: <span className="tracking-widest">{devCode}</span>
             </p>
           )}
+          <label className="field-label" htmlFor="otpCode">
+            {sw ? "Msimbo wa tarakimu 6" : "6-digit code"}
+          </label>
           <input
+            id="otpCode"
             className="field tracking-[0.3em]"
             value={code}
             onChange={(e) => setCode(e.target.value)}
             maxLength={6}
+            inputMode="numeric"
             required
           />
           <button type="submit" className="btn btn-primary" disabled={busy}>
-            {locale === "sw" ? "Thibitisha" : "Confirm approval"}
+            {sw ? "Thibitisha" : "Confirm"}
           </button>
         </form>
       )}

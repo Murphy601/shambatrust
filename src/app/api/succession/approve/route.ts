@@ -5,9 +5,10 @@ import { normalizeKenyanPhone } from "@/lib/auth/phone";
 import { readSession } from "@/lib/auth/session";
 import {
   addAudit,
-  approveSuccessionTrustee,
+  approveSuccessionApproval,
   getSuccessionCase,
   listApprovalsForCase,
+  pendingApprovalRoleFor,
 } from "@/lib/db/store";
 
 const requestSchema = z.object({
@@ -47,22 +48,31 @@ export async function POST(request: Request) {
     }
 
     const approvals = await listApprovalsForCase(successionCase.id);
-    const mine = approvals.find(
-      (a) => a.trusteePhone === phone && a.status === "pending",
+    const role = pendingApprovalRoleFor(
+      approvals,
+      successionCase.status,
+      phone,
     );
-    if (!mine) {
+    if (!role) {
       return NextResponse.json(
-        { error: "This phone is not a pending trustee on this claim." },
+        {
+          error:
+            successionCase.status === "awaiting_guardian_confirmations"
+              ? "This claim is waiting on guardian confirmations, and this phone is not a pending guardian."
+              : "This phone is not a pending trustee on this claim.",
+        },
         { status: 403 },
       );
     }
 
     const { code, expiresAt } = await issueOtp(phone, "succession_confirm", {
       caseId: successionCase.id,
+      role,
     });
 
     return NextResponse.json({
       ok: true,
+      role,
       expiresAt,
       ...(isDevAuthMode() ? { devCode: code } : {}),
     });
@@ -78,10 +88,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid phone." }, { status: 400 });
   }
 
-  // Prefer signed-in phone matching trustee
+  // The confirmation must come from the account that owns the phone, not just
+  // from someone who can read the code over that person's shoulder.
   if (session.phone !== phone) {
     return NextResponse.json(
-      { error: "Sign in with the trustee phone number to approve." },
+      { error: "Sign in with the trustee or guardian phone number to confirm." },
       { status: 403 },
     );
   }
@@ -92,20 +103,31 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await approveSuccessionTrustee({
+    const result = await approveSuccessionApproval({
       caseId: parsed.data.caseId,
-      trusteePhone: phone,
+      phone,
       userId: session.userId,
     });
+
+    const approvedCount =
+      result.role === "guardian" ? result.guardianApproved : result.trusteeApproved;
+    const required =
+      result.role === "guardian" ? result.guardianRequired : result.trusteeRequired;
 
     await addAudit({
       vaultId: result.successionCase.vaultId,
       actorUserId: session.userId,
-      action: "trustee_approved",
-      detail: `${result.approvedCount}/${result.required} · case ${result.successionCase.id}`,
+      action:
+        result.role === "guardian" ? "guardian_confirmed" : "trustee_approved",
+      detail: `${approvedCount}/${required} · case ${result.successionCase.id} · now ${result.successionCase.status}`,
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      ...result,
+      // Kept for existing clients that read a single pair of counters.
+      approvedCount,
+      required,
+    });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Approval failed." },

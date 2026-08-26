@@ -26,6 +26,9 @@ export function SiteHeader() {
           <a href="#how" className="hover:text-forest">
             {t.nav.how}
           </a>
+          <a href="#stories" className="hover:text-forest">
+            {t.nav.stories}
+          </a>
           <a href="#audit" className="hover:text-forest">
             {t.nav.audit}
           </a>

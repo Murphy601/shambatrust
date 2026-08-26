@@ -136,6 +136,101 @@ a {
   }
 }
 
+/* Carousels ------------------------------------------------------------- */
+
+/*
+ * Scroll-snap track. Slides are laid out natively so the carousel keeps working
+ * with touch, trackpad, and keyboard even before JavaScript hydrates.
+ */
+.carousel-track {
+  display: grid;
+  grid-auto-flow: column;
+  gap: 1.25rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 0.5rem;
+}
+
+.carousel-track::-webkit-scrollbar {
+  display: none;
+}
+
+.carousel-slide {
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+  min-width: 0;
+  width: min(30rem, 88vw);
+}
+
+.carousel-slide-wide {
+  width: min(38rem, 90vw);
+}
+
+.carousel-dot {
+  height: 0.7rem;
+  border-radius: 999px;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  width: 0.7rem;
+  padding: 0;
+  cursor: pointer;
+  transition:
+    width 0.25s ease,
+    background-color 0.25s ease,
+    border-color 0.25s ease;
+}
+
+.carousel-dot[aria-current="true"] {
+  width: 2.1rem;
+  background: var(--forest);
+  border-color: var(--forest);
+}
+
+.carousel-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  border-radius: 999px;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  color: var(--forest-deep);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.carousel-arrow:hover:not(:disabled) {
+  border-color: var(--forest);
+}
+
+.carousel-arrow:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.journey-progress {
+  height: 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--forest) 18%, transparent);
+  overflow: hidden;
+}
+
+.journey-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--forest);
+  transition: width 0.4s ease;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -240,5 +335,14 @@ a {
   .audit-step,
   .hero-media {
     animation: none;
+  }
+
+  .carousel-track {
+    scroll-behavior: auto;
+  }
+
+  .carousel-dot,
+  .journey-progress > span {
+    transition: none;
   }
 }

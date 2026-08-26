@@ -3,7 +3,16 @@ import { z } from "zod";
 import { requireVaultAccess } from "@/lib/vault-access";
 import { vaultContentLocked } from "@/lib/vault-lock";
 import { addAudit, listAssets, saveAsset } from "@/lib/db/store";
-import { isLandLike } from "@/lib/asset-fields";
+import { isLandLike, nomineeTotal } from "@/lib/asset-fields";
+
+const nomineeSchema = z.object({
+  id: z.string().optional(),
+  fullName: z.string().min(2),
+  idNumber: z.string().optional().default(""),
+  phone: z.string().optional().default(""),
+  relationship: z.string().optional().default(""),
+  percentage: z.number().min(0).max(100),
+});
 
 const assetSchema = z.object({
   id: z.string().optional(),
@@ -13,6 +22,7 @@ const assetSchema = z.object({
     "business",
     "vehicle",
     "bank_account",
+    "sacco",
     "other",
   ]),
   title: z.string().min(1),
@@ -25,6 +35,10 @@ const assetSchema = z.object({
   landmark: z.string().optional().default(""),
   gpsLat: z.number().nullable().optional(),
   gpsLng: z.number().nullable().optional(),
+  parcelNumber: z.string().optional().default(""),
+  blockNumber: z.string().optional().default(""),
+  registrationSection: z.string().optional().default(""),
+  landRegistryOffice: z.string().optional().default(""),
   registrationNumber: z.string().optional().default(""),
   makeModel: z.string().optional().default(""),
   year: z.string().optional().default(""),
@@ -33,6 +47,10 @@ const assetSchema = z.object({
   accountType: z.string().optional().default(""),
   businessRegNumber: z.string().optional().default(""),
   kraPin: z.string().optional().default(""),
+  saccoName: z.string().optional().default(""),
+  saccoMemberNumber: z.string().optional().default(""),
+  saccoNominees: z.array(nomineeSchema).max(10).optional().default([]),
+  mpesaNumber: z.string().optional().default(""),
 });
 
 export async function GET() {
@@ -104,9 +122,33 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  if (data.type === "sacco" && !data.saccoName.trim()) {
+    return NextResponse.json(
+      { error: "SACCO name is required." },
+      { status: 400 },
+    );
+  }
+
+  // Nominee shares are what the SACCO pays out on, so a partial split would
+  // silently leave a remainder in dispute.
+  const nominees = data.type === "sacco" ? data.saccoNominees : [];
+  if (nominees.length > 0) {
+    const total = nomineeTotal(
+      nominees.map((nominee) => ({ ...nominee, id: nominee.id ?? "" })),
+    );
+    if (Math.round(total) !== 100) {
+      return NextResponse.json(
+        {
+          error: `SACCO nominee percentages must add up to 100% (currently ${total}%).`,
+        },
+        { status: 400 },
+      );
+    }
+  }
 
   const asset = await saveAsset({
     ...data,
+    saccoNominees: nominees,
     vaultId: access.vault.id,
     documentName: data.documentName ?? null,
     documentPath: data.documentPath ?? null,

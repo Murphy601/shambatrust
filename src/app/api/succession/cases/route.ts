@@ -15,13 +15,38 @@ import {
   userCanFileSuccession,
 } from "@/lib/db/store";
 
+const MAX_PROOF_BYTES = 8 * 1024 * 1024;
+
 const jsonSchema = z.object({
   vaultId: z.string(),
   deathDate: z.string().min(4),
   filerNotes: z.string().optional().default(""),
   deathCertificateName: z.string().nullable().optional(),
   deathCertificatePath: z.string().nullable().optional(),
+  deathNotificationName: z.string().nullable().optional(),
+  deathNotificationPath: z.string().nullable().optional(),
 });
+
+type StoredProof = { name: string; path: string } | null;
+
+/** Persist one uploaded proof document and return its stored name and filename. */
+async function storeProof(
+  value: FormDataEntryValue | null,
+  prefix: string,
+  vaultId: string,
+): Promise<StoredProof> {
+  if (!(value instanceof File) || value.size === 0) return null;
+  if (value.size > MAX_PROOF_BYTES) {
+    throw new Error(`${value.name} is too large (max 8MB).`);
+  }
+  const bytes = Buffer.from(await value.arrayBuffer());
+  const safeName = value.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const filename = `${prefix}-${vaultId}-${randomUUID()}-${safeName}`;
+  const dir = uploadsDir();
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(path.join(dir, filename), bytes);
+  return { name: value.name, path: filename };
+}
 
 export async function GET(request: Request) {
   const session = await readSession();
@@ -58,28 +83,31 @@ export async function POST(request: Request) {
   let filerNotes = "";
   let deathCertificateName: string | null = null;
   let deathCertificatePath: string | null = null;
+  let deathNotificationName: string | null = null;
+  let deathNotificationPath: string | null = null;
 
   if (contentType.includes("multipart/form-data")) {
     const form = await request.formData();
     vaultId = String(form.get("vaultId") || "");
     deathDate = String(form.get("deathDate") || "");
     filerNotes = String(form.get("filerNotes") || "");
-    const file = form.get("file");
-    if (file instanceof File && file.size > 0) {
-      if (file.size > 8 * 1024 * 1024) {
-        return NextResponse.json(
-          { error: "File too large (max 8MB)." },
-          { status: 400 },
-        );
-      }
-      const bytes = Buffer.from(await file.arrayBuffer());
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const filename = `death-${vaultId}-${randomUUID()}-${safeName}`;
-      const dir = uploadsDir();
-      await fs.mkdir(dir, { recursive: true });
-      await fs.writeFile(path.join(dir, filename), bytes);
-      deathCertificateName = file.name;
-      deathCertificatePath = filename;
+    try {
+      const certificate = await storeProof(form.get("file"), "death", vaultId);
+      deathCertificateName = certificate?.name ?? null;
+      deathCertificatePath = certificate?.path ?? null;
+
+      const notification = await storeProof(
+        form.get("notificationFile"),
+        "death-notice",
+        vaultId,
+      );
+      deathNotificationName = notification?.name ?? null;
+      deathNotificationPath = notification?.path ?? null;
+    } catch (cause) {
+      return NextResponse.json(
+        { error: cause instanceof Error ? cause.message : "Upload failed." },
+        { status: 400 },
+      );
     }
   } else {
     const parsed = jsonSchema.safeParse(await request.json());
@@ -91,6 +119,8 @@ export async function POST(request: Request) {
     filerNotes = parsed.data.filerNotes;
     deathCertificateName = parsed.data.deathCertificateName ?? null;
     deathCertificatePath = parsed.data.deathCertificatePath ?? null;
+    deathNotificationName = parsed.data.deathNotificationName ?? null;
+    deathNotificationPath = parsed.data.deathNotificationPath ?? null;
   }
 
   if (!vaultId || !deathDate) {
@@ -134,6 +164,15 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  if (plan?.requireDeathNotification && !deathNotificationPath) {
+    return NextResponse.json(
+      {
+        error:
+          "This vault also requires the official death notification (chief's or hospital form).",
+      },
+      { status: 400 },
+    );
+  }
 
   try {
     const { case: successionCase, approvals } = await createSuccessionCase({
@@ -142,16 +181,20 @@ export async function POST(request: Request) {
       deathDate,
       deathCertificateName,
       deathCertificatePath,
+      deathNotificationName,
+      deathNotificationPath,
       filerNotes,
       trustees: plan?.trustees || [],
-      minTrusteeApprovals: plan?.minTrusteeApprovals || 1,
+      guardians: plan?.guardians || [],
     });
 
     await addAudit({
       vaultId,
       actorUserId: session.userId,
       action: "succession_filed",
-      detail: `Case ${successionCase.id} · death ${deathDate} · status ${successionCase.status}`,
+      detail:
+        `Case ${successionCase.id} · death ${deathDate} · status ${successionCase.status} · ` +
+        `certificate ${deathCertificatePath ? "yes" : "no"} · notification ${deathNotificationPath ? "yes" : "no"}`,
     });
 
     return NextResponse.json({ case: successionCase, approvals });

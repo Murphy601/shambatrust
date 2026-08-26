@@ -26,6 +26,7 @@ export function OpsShell({
     ["/ops/advocates", "Applications"],
     ["/ops/advocates-crm", "CRM"],
     ["/ops/succession", "Succession"],
+    ["/ops/transcripts", "Transcripts"],
     ["/ops/retention", "Retention"],
     ["/ops/activity", "Activity"],
   ] as const;

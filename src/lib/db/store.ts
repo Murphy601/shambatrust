@@ -42,6 +42,19 @@ import type {
 import { normalizeLskNumber } from "@/lib/advocate/lsk";
 import { amountForBillingEvent } from "@/lib/ops/billing";
 import { getOpsSeatRole } from "@/lib/ops/seats";
+import {
+  DEFAULT_SPOKEN_LANGUAGE,
+  normalizeSpokenLanguage,
+  type SpokenLanguage,
+} from "@/lib/languages";
+import type {
+  AdvocateMatch,
+  AudioTestament,
+  ExecutionGuardian,
+  SaccoNominee,
+  SuccessionApprovalRole,
+  TranscriptStatus,
+} from "@/lib/db/types";
 
 const DATA_DIR = path.join(process.cwd(), ".data");
 const DB_PATH = path.join(DATA_DIR, "db.json");
@@ -50,6 +63,8 @@ const emptyDb = (): Database => ({
   users: [],
   vaults: [],
   assets: [],
+  audioTestaments: [],
+  advocateMatches: [],
   beneficiaries: [],
   allocations: [],
   agentLinks: [],
@@ -71,6 +86,64 @@ const emptyDb = (): Database => ({
   otps: [],
   auditLog: [],
 });
+
+/**
+ * Older `db.json` files predate the ArdhiSasa / SACCO columns. Fill them in on
+ * read so callers never have to guard for `undefined`.
+ */
+function normalizeAsset(a: Asset): Asset {
+  return {
+    ...a,
+    parcelNumber: a.parcelNumber ?? "",
+    blockNumber: a.blockNumber ?? "",
+    registrationSection: a.registrationSection ?? "",
+    landRegistryOffice: a.landRegistryOffice ?? "",
+    saccoName: a.saccoName ?? "",
+    saccoMemberNumber: a.saccoMemberNumber ?? "",
+    saccoNominees: Array.isArray(a.saccoNominees) ? a.saccoNominees : [],
+    mpesaNumber: a.mpesaNumber ?? "",
+  };
+}
+
+function normalizeLegalDoc(d: LegalDocument): LegalDocument {
+  return {
+    ...d,
+    stampRef: d.stampRef ?? null,
+    stampedAt: d.stampedAt ?? null,
+    stampedByUserId: d.stampedByUserId ?? null,
+    stampAdvocateName: d.stampAdvocateName ?? "",
+    stampLskNumber: d.stampLskNumber ?? "",
+    stampCounty: d.stampCounty ?? "",
+    stampNotes: d.stampNotes ?? "",
+  };
+}
+
+function normalizePlan(p: ExecutionPlan): ExecutionPlan {
+  const guardians = Array.isArray(p.guardians) ? p.guardians : [];
+  return {
+    ...p,
+    trustees: Array.isArray(p.trustees) ? p.trustees : [],
+    guardians,
+    // Legacy plans have no guardians; keep the requirement at 0 so their
+    // existing claims still reach ops instead of stalling forever.
+    minGuardianApprovals:
+      typeof p.minGuardianApprovals === "number"
+        ? p.minGuardianApprovals
+        : Math.min(2, guardians.length),
+    requireDeathNotification: Boolean(p.requireDeathNotification),
+  };
+}
+
+function normalizeSuccessionCase(c: SuccessionCase): SuccessionCase {
+  return {
+    ...c,
+    deathNotificationName: c.deathNotificationName ?? null,
+    deathNotificationPath: c.deathNotificationPath ?? null,
+    vaultReleasedAt: c.vaultReleasedAt ?? null,
+    vaultReleasedByUserId: c.vaultReleasedByUserId ?? null,
+    releaseNotes: c.releaseNotes ?? "",
+  };
+}
 
 function normalizeReview(r: ReviewRequest): ReviewRequest {
   return {
@@ -115,10 +188,15 @@ export async function readDb(): Promise<Database> {
     county: u.county ?? "",
     // Legacy accounts skip re-KYC; new signups set this explicitly
     profileComplete: u.profileComplete !== false,
+    preferredLanguage: normalizeSpokenLanguage(u.preferredLanguage ?? u.locale),
+    audioGuidance: Boolean(u.audioGuidance),
     advocateLicense: u.advocateLicense ?? null,
     opsSeat:
       u.opsSeat ??
       (u.role === "admin" ? getOpsSeatRole(u.phone) : null),
+    advocateCounties: Array.isArray(u.advocateCounties)
+      ? u.advocateCounties
+      : [],
     advocateSuspended: Boolean(u.advocateSuspended),
     advocateMaxCases: u.advocateMaxCases ?? null,
     advocateOooUntil: u.advocateOooUntil ?? null,
@@ -141,10 +219,21 @@ export async function readDb(): Promise<Database> {
     costKes: t.costKes ?? amountForBillingEvent("title_lookup"),
   }));
   db.reviewRequests = (db.reviewRequests || []).map(normalizeReview);
-  db.legalDocuments = db.legalDocuments || [];
-  db.executionPlans = db.executionPlans || [];
-  db.successionCases = db.successionCases || [];
-  db.successionApprovals = db.successionApprovals || [];
+  db.assets = (db.assets || []).map(normalizeAsset);
+  db.legalDocuments = (db.legalDocuments || []).map(normalizeLegalDoc);
+  db.executionPlans = (db.executionPlans || []).map(normalizePlan);
+  db.successionCases = (db.successionCases || []).map(normalizeSuccessionCase);
+  db.successionApprovals = (db.successionApprovals || []).map((a) => ({
+    ...a,
+    role: a.role ?? "trustee",
+  }));
+  db.audioTestaments = (db.audioTestaments || []).map((t) => ({
+    ...t,
+    language: normalizeSpokenLanguage(t.language),
+    transcript: t.transcript ?? "",
+    transcriptNotes: t.transcriptNotes ?? "",
+  }));
+  db.advocateMatches = db.advocateMatches || [];
   db.advocateApplications = db.advocateApplications || [];
   db.billingRecords = db.billingRecords || [];
   db.supportSessions = db.supportSessions || [];
@@ -235,6 +324,8 @@ export async function createUser(input: {
   fullName: string;
   role: User["role"];
   locale?: User["locale"];
+  preferredLanguage?: SpokenLanguage;
+  audioGuidance?: boolean;
   advocateLicense?: string | null;
   email?: string | null;
   idFrontName?: string | null;
@@ -264,6 +355,10 @@ export async function createUser(input: {
     fullName: input.fullName || "ShambaTrust Member",
     role: input.role,
     locale: input.locale || "en",
+    preferredLanguage: normalizeSpokenLanguage(
+      input.preferredLanguage ?? input.locale ?? DEFAULT_SPOKEN_LANGUAGE,
+    ),
+    audioGuidance: Boolean(input.audioGuidance),
     idFrontName: input.idFrontName ?? null,
     idFrontPath: input.idFrontPath ?? null,
     idBackName: input.idBackName ?? null,
@@ -273,6 +368,10 @@ export async function createUser(input: {
     profileComplete: input.profileComplete !== false,
     advocateLicense: input.advocateLicense || null,
     opsSeat: input.role === "admin" ? getOpsSeatRole(input.phone) : null,
+    advocateCounties:
+      input.role === "advocate" && input.county?.trim()
+        ? [input.county.trim()]
+        : [],
     advocateSuspended: false,
     advocateMaxCases: input.role === "advocate" ? 10 : null,
     advocateOooUntil: null,
@@ -335,17 +434,37 @@ export async function getAsset(
   return db.assets.find((a) => a.vaultId === vaultId && a.id === assetId);
 }
 
+/** Stamp ids onto nominee rows so React keys and edits stay stable. */
+function withNomineeIds(
+  nominees: Array<Omit<SaccoNominee, "id"> & { id?: string }> | undefined,
+): SaccoNominee[] {
+  if (!nominees) return [];
+  return nominees.map((nominee) => ({
+    id: nominee.id || newId(),
+    fullName: nominee.fullName.trim(),
+    idNumber: nominee.idNumber.trim(),
+    phone: nominee.phone.trim(),
+    relationship: nominee.relationship.trim(),
+    percentage: nominee.percentage,
+  }));
+}
+
 export async function saveAsset(
-  asset: Omit<Asset, "id" | "createdAt" | "updatedAt"> & { id?: string },
+  asset: Omit<Asset, "id" | "createdAt" | "updatedAt" | "saccoNominees"> & {
+    id?: string;
+    saccoNominees?: Array<Omit<SaccoNominee, "id"> & { id?: string }>;
+  },
 ): Promise<Asset> {
   const db = await readDb();
   const now = new Date().toISOString();
+  const saccoNominees = withNomineeIds(asset.saccoNominees);
   if (asset.id) {
     const idx = db.assets.findIndex((a) => a.id === asset.id);
     if (idx >= 0) {
       const updated: Asset = {
         ...db.assets[idx],
         ...asset,
+        saccoNominees,
         id: asset.id,
         updatedAt: now,
       };
@@ -369,6 +488,10 @@ export async function saveAsset(
     landmark: asset.landmark || "",
     gpsLat: asset.gpsLat ?? null,
     gpsLng: asset.gpsLng ?? null,
+    parcelNumber: asset.parcelNumber || "",
+    blockNumber: asset.blockNumber || "",
+    registrationSection: asset.registrationSection || "",
+    landRegistryOffice: asset.landRegistryOffice || "",
     registrationNumber: asset.registrationNumber || "",
     makeModel: asset.makeModel || "",
     year: asset.year || "",
@@ -377,6 +500,10 @@ export async function saveAsset(
     accountType: asset.accountType || "",
     businessRegNumber: asset.businessRegNumber || "",
     kraPin: asset.kraPin || "",
+    saccoName: asset.saccoName || "",
+    saccoMemberNumber: asset.saccoMemberNumber || "",
+    saccoNominees,
+    mpesaNumber: asset.mpesaNumber || "",
     createdAt: now,
     updatedAt: now,
   };
@@ -397,6 +524,10 @@ export async function deleteAsset(
     (a) => !(a.vaultId === vaultId && a.id === assetId),
   );
   db.allocations = db.allocations.filter((a) => a.assetId !== assetId);
+  // Keep the recording; it is evidence of intent. Just drop the dangling link.
+  for (const testament of db.audioTestaments) {
+    if (testament.assetId === assetId) testament.assetId = null;
+  }
   if (db.assets.length === before) return false;
   await touchVault(db, vaultId);
   await writeDb(db);
@@ -793,6 +924,43 @@ export async function getLegalDocument(
   return db.legalDocuments.find((d) => d.id === id);
 }
 
+/** Human-readable, collision-resistant reference printed on the stamp. */
+function buildStampRef(lskNumber: string): string {
+  const now = new Date();
+  const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+  const suffix = newId().replace(/-/g, "").slice(0, 6).toUpperCase();
+  const licence = normalizeLskNumber(lskNumber) || "LSK";
+  return `ST-${licence}-${stamp}-${suffix}`;
+}
+
+export async function stampLegalDocument(input: {
+  documentId: string;
+  advocateUserId: string;
+  advocateName: string;
+  lskNumber: string;
+  county: string;
+  notes: string;
+}): Promise<LegalDocument | null> {
+  const db = await readDb();
+  const doc = db.legalDocuments.find((d) => d.id === input.documentId);
+  if (!doc) return null;
+
+  const now = new Date().toISOString();
+  // Re-stamping keeps the original reference so the chain of custody is stable.
+  doc.stampRef = doc.stampRef || buildStampRef(input.lskNumber);
+  doc.stampedAt = now;
+  doc.stampedByUserId = input.advocateUserId;
+  doc.stampAdvocateName = input.advocateName;
+  doc.stampLskNumber = normalizeLskNumber(input.lskNumber);
+  doc.stampCounty = input.county.trim();
+  doc.stampNotes = input.notes.trim();
+  if (doc.status === "draft") doc.status = "ready_for_sign";
+  doc.updatedAt = now;
+
+  await writeDb(db);
+  return doc;
+}
+
 export async function saveLegalDocument(input: {
   id?: string;
   reviewRequestId: string;
@@ -845,6 +1013,13 @@ export async function saveLegalDocument(input: {
     signatureName: null,
     signedAt: null,
     signedByUserId: null,
+    stampRef: null,
+    stampedAt: null,
+    stampedByUserId: null,
+    stampAdvocateName: "",
+    stampLskNumber: "",
+    stampCounty: "",
+    stampNotes: "",
     createdAt: now,
     updatedAt: now,
   };
@@ -1008,6 +1183,8 @@ export async function ensureAdminUser(input: {
     fullName: input.fullName.trim() || "ShambaTrust Ops",
     role: "admin",
     locale: "en",
+    preferredLanguage: DEFAULT_SPOKEN_LANGUAGE,
+    audioGuidance: false,
     idFrontName: null,
     idFrontPath: null,
     idBackName: null,
@@ -1017,6 +1194,7 @@ export async function ensureAdminUser(input: {
     profileComplete: true,
     advocateLicense: null,
     opsSeat: getOpsSeatRole(input.phone) || "super",
+    advocateCounties: [],
     advocateSuspended: false,
     advocateMaxCases: null,
     advocateOooUntil: null,
@@ -1037,7 +1215,10 @@ export function defaultExecutionPlan(
     triggerType: "upon_death",
     trustees: [],
     minTrusteeApprovals: 2,
+    guardians: [],
+    minGuardianApprovals: 2,
     requireDeathCertificate: true,
+    requireDeathNotification: true,
     coolingHours: 48,
     updatedAt: new Date().toISOString(),
     updatedByUserId: userId,
@@ -1055,7 +1236,10 @@ export async function saveExecutionPlan(input: {
   vaultId: string;
   trustees: ExecutionTrustee[];
   minTrusteeApprovals: number;
+  guardians: ExecutionGuardian[];
+  minGuardianApprovals: number;
   requireDeathCertificate: boolean;
+  requireDeathNotification: boolean;
   coolingHours: number;
   updatedByUserId: string;
 }): Promise<ExecutionPlan> {
@@ -1065,7 +1249,10 @@ export async function saveExecutionPlan(input: {
   if (existing) {
     existing.trustees = input.trustees;
     existing.minTrusteeApprovals = input.minTrusteeApprovals;
+    existing.guardians = input.guardians;
+    existing.minGuardianApprovals = input.minGuardianApprovals;
     existing.requireDeathCertificate = input.requireDeathCertificate;
+    existing.requireDeathNotification = input.requireDeathNotification;
     existing.coolingHours = input.coolingHours;
     existing.updatedAt = now;
     existing.updatedByUserId = input.updatedByUserId;
@@ -1078,7 +1265,10 @@ export async function saveExecutionPlan(input: {
     triggerType: "upon_death",
     trustees: input.trustees,
     minTrusteeApprovals: input.minTrusteeApprovals,
+    guardians: input.guardians,
+    minGuardianApprovals: input.minGuardianApprovals,
     requireDeathCertificate: input.requireDeathCertificate,
+    requireDeathNotification: input.requireDeathNotification,
     coolingHours: input.coolingHours,
     updatedAt: now,
     updatedByUserId: input.updatedByUserId,
@@ -1118,15 +1308,58 @@ export async function listApprovalsForCase(
   return db.successionApprovals.filter((a) => a.caseId === caseId);
 }
 
+/**
+ * Which confirmation stage a claim is sitting in, given how many trustee and
+ * guardian approvals have landed so far. Trustees go first, guardians second,
+ * and only then does the case reach the ops desk.
+ */
+function successionStageFor(input: {
+  trusteeApproved: number;
+  trusteeRequired: number;
+  guardianApproved: number;
+  guardianRequired: number;
+}): Extract<
+  SuccessionCaseStatus,
+  | "awaiting_trustee_otps"
+  | "awaiting_guardian_confirmations"
+  | "pending_ops_verification"
+> {
+  if (input.trusteeApproved < input.trusteeRequired) {
+    return "awaiting_trustee_otps";
+  }
+  if (input.guardianApproved < input.guardianRequired) {
+    return "awaiting_guardian_confirmations";
+  }
+  return "pending_ops_verification";
+}
+
+/** Approval thresholds for a case, clamped to the people actually named. */
+function successionThresholds(
+  db: Database,
+  vaultId: string,
+  caseId: string,
+): { trusteeRequired: number; guardianRequired: number } {
+  const plan = db.executionPlans.find((p) => p.vaultId === vaultId);
+  const slots = db.successionApprovals.filter((a) => a.caseId === caseId);
+  const trusteeSlots = slots.filter((a) => a.role === "trustee").length;
+  const guardianSlots = slots.filter((a) => a.role === "guardian").length;
+  return {
+    trusteeRequired: Math.min(plan?.minTrusteeApprovals ?? 1, trusteeSlots),
+    guardianRequired: Math.min(plan?.minGuardianApprovals ?? 0, guardianSlots),
+  };
+}
+
 export async function createSuccessionCase(input: {
   vaultId: string;
   filedByUserId: string;
   deathDate: string;
   deathCertificateName: string | null;
   deathCertificatePath: string | null;
+  deathNotificationName: string | null;
+  deathNotificationPath: string | null;
   filerNotes: string;
   trustees: ExecutionTrustee[];
-  minTrusteeApprovals: number;
+  guardians: ExecutionGuardian[];
 }): Promise<{ case: SuccessionCase; approvals: SuccessionApproval[] }> {
   const db = await readDb();
   const open = db.successionCases.find(
@@ -1140,102 +1373,186 @@ export async function createSuccessionCase(input: {
   }
 
   const now = new Date().toISOString();
-  const hasTrustees = input.trustees.length > 0;
-  const status: SuccessionCaseStatus = hasTrustees
-    ? "awaiting_trustee_otps"
-    : "pending_ops_verification";
-
   const created: SuccessionCase = {
     id: newId(),
     vaultId: input.vaultId,
     filedByUserId: input.filedByUserId,
-    status,
+    status: "succession_filed",
     deathDate: input.deathDate,
     deathCertificateName: input.deathCertificateName,
     deathCertificatePath: input.deathCertificatePath,
+    deathNotificationName: input.deathNotificationName,
+    deathNotificationPath: input.deathNotificationPath,
     filerNotes: input.filerNotes,
     opsReviewedByUserId: null,
     opsDecisionAt: null,
     opsNotes: "",
     advocateId: null,
     coolingEndsAt: null,
+    vaultReleasedAt: null,
+    vaultReleasedByUserId: null,
+    releaseNotes: "",
     createdAt: now,
     updatedAt: now,
   };
   db.successionCases.push(created);
 
-  const approvals: SuccessionApproval[] = input.trustees.map((t) => ({
-    id: newId(),
-    caseId: created.id,
-    trusteePhone: t.phone,
-    trusteeName: t.fullName,
-    status: "pending" as const,
-    approvedAt: null,
-    userId: null,
-  }));
+  const approvals: SuccessionApproval[] = [
+    ...input.trustees.map((t) => ({
+      id: newId(),
+      caseId: created.id,
+      role: "trustee" as const,
+      trusteePhone: t.phone,
+      trusteeName: t.fullName,
+      status: "pending" as const,
+      approvedAt: null,
+      userId: null,
+    })),
+    ...input.guardians.map((g) => ({
+      id: newId(),
+      caseId: created.id,
+      role: "guardian" as const,
+      trusteePhone: g.phone,
+      trusteeName: g.fullName,
+      status: "pending" as const,
+      approvedAt: null,
+      userId: null,
+    })),
+  ];
   db.successionApprovals.push(...approvals);
 
-  // If no trustees configured, go straight to ops
-  if (!hasTrustees) {
-    created.status = "pending_ops_verification";
-  }
+  const { trusteeRequired, guardianRequired } = successionThresholds(
+    db,
+    input.vaultId,
+    created.id,
+  );
+  created.status = successionStageFor({
+    trusteeApproved: 0,
+    trusteeRequired,
+    guardianApproved: 0,
+    guardianRequired,
+  });
 
   await writeDb(db);
   return { case: created, approvals };
 }
 
-export async function approveSuccessionTrustee(input: {
-  caseId: string;
-  trusteePhone: string;
-  userId: string;
-}): Promise<{
+export type SuccessionApprovalProgress = {
   approval: SuccessionApproval;
   successionCase: SuccessionCase;
-  approvedCount: number;
-  required: number;
-}> {
+  role: SuccessionApprovalRole;
+  trusteeApproved: number;
+  trusteeRequired: number;
+  guardianApproved: number;
+  guardianRequired: number;
+};
+
+/**
+ * Which pending approval slot a given phone can act on right now. Someone named
+ * as both trustee and guardian confirms twice — once per stage — so the slot is
+ * chosen from the stage the case is currently in.
+ */
+export function pendingApprovalRoleFor(
+  approvals: SuccessionApproval[],
+  status: SuccessionCaseStatus,
+  phone: string,
+): SuccessionApprovalRole | null {
+  const stageRole: SuccessionApprovalRole =
+    status === "awaiting_guardian_confirmations" ? "guardian" : "trustee";
+  const pending = approvals.filter(
+    (a) => a.status === "pending" && phonesEqual(a.trusteePhone, phone),
+  );
+  if (pending.some((a) => a.role === stageRole)) return stageRole;
+  return null;
+}
+
+export async function approveSuccessionApproval(input: {
+  caseId: string;
+  phone: string;
+  userId: string;
+}): Promise<SuccessionApprovalProgress> {
   const db = await readDb();
   const successionCase = db.successionCases.find((c) => c.id === input.caseId);
   if (!successionCase) throw new Error("Succession case not found.");
 
   if (
     successionCase.status !== "awaiting_trustee_otps" &&
+    successionCase.status !== "awaiting_guardian_confirmations" &&
     successionCase.status !== "succession_filed"
   ) {
-    throw new Error("This claim is not waiting for trustee approvals.");
+    throw new Error("This claim is not waiting for confirmations.");
   }
 
-  const approval = db.successionApprovals.find(
-    (a) =>
-      a.caseId === input.caseId &&
-      a.trusteePhone === input.trusteePhone &&
-      a.status === "pending",
+  const caseApprovals = db.successionApprovals.filter(
+    (a) => a.caseId === input.caseId,
   );
-  if (!approval) throw new Error("No pending approval for this trustee phone.");
+  const role = pendingApprovalRoleFor(
+    caseApprovals,
+    successionCase.status,
+    input.phone,
+  );
+  if (!role) {
+    throw new Error(
+      successionCase.status === "awaiting_guardian_confirmations"
+        ? "This claim is waiting on guardian confirmations, and no guardian slot is open for your number."
+        : "No pending trustee approval for your number on this claim.",
+    );
+  }
+
+  const approval = caseApprovals.find(
+    (a) =>
+      a.role === role &&
+      a.status === "pending" &&
+      phonesEqual(a.trusteePhone, input.phone),
+  );
+  if (!approval) throw new Error("No pending approval for your number.");
+
+  // The dual-guardian rule only means something if two different people sign.
+  const alreadySignedSameStage = caseApprovals.some(
+    (a) =>
+      a.role === role && a.status === "approved" && a.userId === input.userId,
+  );
+  if (alreadySignedSameStage) {
+    throw new Error(
+      `You have already confirmed as a ${role} on this claim. A different ${role} must confirm.`,
+    );
+  }
 
   const now = new Date().toISOString();
   approval.status = "approved";
   approval.approvedAt = now;
   approval.userId = input.userId;
 
-  const plan = db.executionPlans.find(
-    (p) => p.vaultId === successionCase.vaultId,
+  const { trusteeRequired, guardianRequired } = successionThresholds(
+    db,
+    successionCase.vaultId,
+    input.caseId,
   );
-  const required = plan?.minTrusteeApprovals || 1;
-  const approvedCount = db.successionApprovals.filter(
-    (a) => a.caseId === input.caseId && a.status === "approved",
+  const trusteeApproved = caseApprovals.filter(
+    (a) => a.role === "trustee" && a.status === "approved",
+  ).length;
+  const guardianApproved = caseApprovals.filter(
+    (a) => a.role === "guardian" && a.status === "approved",
   ).length;
 
-  if (approvedCount >= required) {
-    successionCase.status = "pending_ops_verification";
-    successionCase.updatedAt = now;
-  } else {
-    successionCase.status = "awaiting_trustee_otps";
-    successionCase.updatedAt = now;
-  }
+  successionCase.status = successionStageFor({
+    trusteeApproved,
+    trusteeRequired,
+    guardianApproved,
+    guardianRequired,
+  });
+  successionCase.updatedAt = now;
 
   await writeDb(db);
-  return { approval, successionCase, approvedCount, required };
+  return {
+    approval,
+    successionCase,
+    role,
+    trusteeApproved,
+    trusteeRequired,
+    guardianApproved,
+    guardianRequired,
+  };
 }
 
 export async function opsDecideSuccession(input: {
@@ -1273,6 +1590,210 @@ export async function opsDecideSuccession(input: {
 
   await writeDb(db);
   return successionCase;
+}
+
+export type SuccessionReleaseGates = {
+  trusteeApproved: number;
+  trusteeRequired: number;
+  guardianApproved: number;
+  guardianRequired: number;
+  requiresCertificate: boolean;
+  hasCertificate: boolean;
+  requiresNotification: boolean;
+  hasNotification: boolean;
+  opsVerified: boolean;
+  coolingEndsAt: string | null;
+  coolingActive: boolean;
+  released: boolean;
+  /** Everything still standing between this claim and executor access. */
+  blockers: string[];
+  canRelease: boolean;
+};
+
+function evaluateReleaseGates(
+  db: Database,
+  successionCase: SuccessionCase,
+): SuccessionReleaseGates {
+  const plan = db.executionPlans.find(
+    (p) => p.vaultId === successionCase.vaultId,
+  );
+  const { trusteeRequired, guardianRequired } = successionThresholds(
+    db,
+    successionCase.vaultId,
+    successionCase.id,
+  );
+  const approvals = db.successionApprovals.filter(
+    (a) => a.caseId === successionCase.id,
+  );
+  const trusteeApproved = approvals.filter(
+    (a) => a.role === "trustee" && a.status === "approved",
+  ).length;
+  const guardianApproved = approvals.filter(
+    (a) => a.role === "guardian" && a.status === "approved",
+  ).length;
+
+  const requiresCertificate = plan?.requireDeathCertificate !== false;
+  const hasCertificate = Boolean(successionCase.deathCertificatePath);
+  const requiresNotification = Boolean(plan?.requireDeathNotification);
+  const hasNotification = Boolean(successionCase.deathNotificationPath);
+
+  const opsVerified =
+    successionCase.status === "succession_verified" ||
+    successionCase.status === "with_advocate" ||
+    successionCase.status === "succession_completed";
+  const coolingActive = Boolean(
+    successionCase.coolingEndsAt &&
+      new Date(successionCase.coolingEndsAt).getTime() > Date.now(),
+  );
+  const released = Boolean(successionCase.vaultReleasedAt);
+
+  const blockers: string[] = [];
+  if (!opsVerified) {
+    blockers.push("Ops have not verified this claim yet.");
+  }
+  if (coolingActive && successionCase.coolingEndsAt) {
+    blockers.push(
+      `Cooling period is active until ${new Date(successionCase.coolingEndsAt).toLocaleString()}.`,
+    );
+  }
+  if (requiresCertificate && !hasCertificate) {
+    blockers.push("Death certificate is missing on this claim.");
+  }
+  if (requiresNotification && !hasNotification) {
+    blockers.push("Official death notification is missing on this claim.");
+  }
+  if (trusteeApproved < trusteeRequired) {
+    blockers.push(
+      `Trustee approvals incomplete (${trusteeApproved}/${trusteeRequired}).`,
+    );
+  }
+  if (guardianApproved < guardianRequired) {
+    blockers.push(
+      `Guardian confirmations incomplete (${guardianApproved}/${guardianRequired}).`,
+    );
+  }
+
+  return {
+    trusteeApproved,
+    trusteeRequired,
+    guardianApproved,
+    guardianRequired,
+    requiresCertificate,
+    hasCertificate,
+    requiresNotification,
+    hasNotification,
+    opsVerified,
+    coolingEndsAt: successionCase.coolingEndsAt,
+    coolingActive,
+    released,
+    blockers,
+    canRelease: !released && blockers.length === 0,
+  };
+}
+
+/**
+ * Server-evaluated release gates. The UI renders these rather than recomputing
+ * the rules (and a wall clock) in the browser.
+ */
+export async function getSuccessionReleaseGates(
+  caseId: string,
+): Promise<SuccessionReleaseGates | null> {
+  const db = await readDb();
+  const successionCase = db.successionCases.find((c) => c.id === caseId);
+  if (!successionCase) return null;
+  return evaluateReleaseGates(db, successionCase);
+}
+
+/**
+ * Final gate of the Dead Man's Switch: ops hand the sealed vault to the
+ * executors. Only reachable after ops verification, after the cooling period,
+ * and only when every proof the elder demanded is actually on file.
+ */
+export async function releaseSuccessionVault(input: {
+  caseId: string;
+  adminUserId: string;
+  releaseNotes: string;
+}): Promise<SuccessionCase> {
+  const db = await readDb();
+  const successionCase = db.successionCases.find((c) => c.id === input.caseId);
+  if (!successionCase) throw new Error("Succession case not found.");
+  if (successionCase.vaultReleasedAt) return successionCase;
+
+  const gates = evaluateReleaseGates(db, successionCase);
+  if (!gates.canRelease) {
+    throw new Error(gates.blockers[0] || "This claim cannot be released yet.");
+  }
+
+  const now = new Date().toISOString();
+  successionCase.vaultReleasedAt = now;
+  successionCase.vaultReleasedByUserId = input.adminUserId;
+  successionCase.releaseNotes = input.releaseNotes.trim();
+  successionCase.updatedAt = now;
+
+  await writeDb(db);
+  return successionCase;
+}
+
+function canOpenReleased(
+  db: Database,
+  successionCase: SuccessionCase,
+  userId: string,
+  phone: string,
+): boolean {
+  if (!successionCase.vaultReleasedAt) return false;
+
+  const confirmed = db.successionApprovals.some(
+    (a) =>
+      a.caseId === successionCase.id &&
+      a.status === "approved" &&
+      (a.userId === userId || phonesEqual(a.trusteePhone, phone)),
+  );
+  if (confirmed) return true;
+
+  return db.beneficiaries.some(
+    (b) =>
+      b.vaultId === successionCase.vaultId &&
+      Boolean(b.phone) &&
+      phonesEqual(b.phone, phone),
+  );
+}
+
+/**
+ * Executors who may open a released vault: the trustees and guardians who
+ * actually confirmed, plus the named heirs. The person who filed only qualifies
+ * through one of those roles.
+ */
+export async function userCanOpenReleasedVault(input: {
+  userId: string;
+  phone: string;
+  caseId: string;
+}): Promise<boolean> {
+  const db = await readDb();
+  const successionCase = db.successionCases.find((c) => c.id === input.caseId);
+  if (!successionCase) return false;
+  return canOpenReleased(db, successionCase, input.userId, input.phone);
+}
+
+export async function listReleasedCasesForUser(input: {
+  userId: string;
+  phone: string;
+}): Promise<Array<{ caseId: string; vaultId: string; ownerName: string }>> {
+  const db = await readDb();
+  return db.successionCases
+    .filter((successionCase) =>
+      canOpenReleased(db, successionCase, input.userId, input.phone),
+    )
+    .map((successionCase) => {
+      const vault = db.vaults.find((v) => v.id === successionCase.vaultId);
+      const owner = vault
+        ? db.users.find((u) => u.id === vault.ownerId)
+        : undefined;
+      return {
+        caseId: successionCase.id,
+        vaultId: successionCase.vaultId,
+        ownerName: owner?.fullName || "Elder",
+      };
+    });
 }
 
 export async function advocateClaimSuccession(input: {
@@ -1511,6 +2032,8 @@ export async function reviewAdvocateApplication(input: {
         fullName: app.fullName,
         role: "advocate",
         locale: "en",
+        preferredLanguage: DEFAULT_SPOKEN_LANGUAGE,
+        audioGuidance: false,
         idFrontName: app.idFrontName || null,
         idFrontPath: app.idFrontPath || null,
         idBackName: app.idBackName || null,
@@ -1520,6 +2043,7 @@ export async function reviewAdvocateApplication(input: {
         profileComplete: true,
         advocateLicense: app.lskNumber,
         opsSeat: null,
+        advocateCounties: [],
         advocateSuspended: false,
         advocateMaxCases: 10,
         advocateOooUntil: null,
@@ -1564,8 +2088,214 @@ export async function findApprovedAdvocate(
   return approved ? user : null;
 }
 
+export async function listAudioTestaments(
+  vaultId: string,
+): Promise<AudioTestament[]> {
+  const db = await readDb();
+  return db.audioTestaments
+    .filter((t) => t.vaultId === vaultId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function getAudioTestament(
+  id: string,
+): Promise<AudioTestament | undefined> {
+  const db = await readDb();
+  return db.audioTestaments.find((t) => t.id === id);
+}
+
+export async function createAudioTestament(input: {
+  vaultId: string;
+  assetId: string | null;
+  recordedByUserId: string;
+  recordedByAgent: boolean;
+  title: string;
+  language: SpokenLanguage;
+  documentName: string;
+  documentPath: string;
+  mimeType: string;
+  fileSize: number;
+  durationSeconds: number | null;
+}): Promise<AudioTestament> {
+  const db = await readDb();
+  const now = new Date().toISOString();
+  const created: AudioTestament = {
+    id: newId(),
+    vaultId: input.vaultId,
+    assetId: input.assetId,
+    recordedByUserId: input.recordedByUserId,
+    recordedByAgent: input.recordedByAgent,
+    title: input.title.trim() || "Voice testament",
+    language: normalizeSpokenLanguage(input.language),
+    documentName: input.documentName,
+    documentPath: input.documentPath,
+    mimeType: input.mimeType,
+    fileSize: input.fileSize,
+    durationSeconds: input.durationSeconds,
+    transcript: "",
+    transcriptStatus: "pending",
+    transcribedByUserId: null,
+    transcribedAt: null,
+    transcriptNotes: "",
+    createdAt: now,
+    updatedAt: now,
+  };
+  db.audioTestaments.push(created);
+  await touchVault(db, input.vaultId);
+  await writeDb(db);
+  return created;
+}
+
+export async function saveAudioTranscript(input: {
+  testamentId: string;
+  transcript: string;
+  transcriptStatus: TranscriptStatus;
+  transcriptNotes: string;
+  transcribedByUserId: string;
+}): Promise<AudioTestament | null> {
+  const db = await readDb();
+  const testament = db.audioTestaments.find((t) => t.id === input.testamentId);
+  if (!testament) return null;
+
+  const now = new Date().toISOString();
+  testament.transcript = input.transcript;
+  testament.transcriptStatus = input.transcriptStatus;
+  testament.transcriptNotes = input.transcriptNotes.trim();
+  testament.transcribedByUserId = input.transcribedByUserId;
+  testament.transcribedAt =
+    input.transcriptStatus === "pending" ? null : now;
+  testament.updatedAt = now;
+
+  await writeDb(db);
+  return testament;
+}
+
+export async function deleteAudioTestament(
+  vaultId: string,
+  testamentId: string,
+): Promise<AudioTestament | null> {
+  const db = await readDb();
+  const testament = db.audioTestaments.find(
+    (t) => t.id === testamentId && t.vaultId === vaultId,
+  );
+  if (!testament) return null;
+  db.audioTestaments = db.audioTestaments.filter((t) => t.id !== testamentId);
+  await touchVault(db, vaultId);
+  await writeDb(db);
+  return testament;
+}
+
+export async function listAllPendingTranscripts(): Promise<AudioTestament[]> {
+  const db = await readDb();
+  return db.audioTestaments
+    .filter(
+      (t) =>
+        t.transcriptStatus === "pending" || t.transcriptStatus === "in_progress",
+    )
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+export async function replaceAdvocateMatches(
+  reviewRequestId: string,
+  matches: Array<Omit<AdvocateMatch, "id" | "createdAt" | "resolvedAt" | "status">>,
+): Promise<AdvocateMatch[]> {
+  const db = await readDb();
+  db.advocateMatches = db.advocateMatches.filter(
+    (m) => m.reviewRequestId !== reviewRequestId,
+  );
+  const now = new Date().toISOString();
+  const created: AdvocateMatch[] = matches.map((m) => ({
+    id: newId(),
+    ...m,
+    status: "offered",
+    createdAt: now,
+    resolvedAt: null,
+  }));
+  db.advocateMatches.push(...created);
+  await writeDb(db);
+  return created;
+}
+
+export async function listAdvocateMatchesForReview(
+  reviewRequestId: string,
+): Promise<AdvocateMatch[]> {
+  const db = await readDb();
+  return db.advocateMatches
+    .filter((m) => m.reviewRequestId === reviewRequestId)
+    .sort((a, b) => b.score - a.score);
+}
+
+export async function listAdvocateMatchesForAdvocate(
+  advocateId: string,
+): Promise<AdvocateMatch[]> {
+  const db = await readDb();
+  return db.advocateMatches
+    .filter((m) => m.advocateId === advocateId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/** First advocate to claim wins; the remaining offers on that case expire. */
+export async function resolveAdvocateMatches(
+  reviewRequestId: string,
+  claimedByAdvocateId: string,
+): Promise<void> {
+  const db = await readDb();
+  const now = new Date().toISOString();
+  let changed = false;
+  for (const match of db.advocateMatches) {
+    if (match.reviewRequestId !== reviewRequestId) continue;
+    if (match.status !== "offered") continue;
+    match.status =
+      match.advocateId === claimedByAdvocateId ? "claimed" : "expired";
+    match.resolvedAt = now;
+    changed = true;
+  }
+  if (changed) await writeDb(db);
+}
+
+export async function updateUserPreferences(input: {
+  userId: string;
+  locale?: User["locale"];
+  preferredLanguage?: SpokenLanguage;
+  audioGuidance?: boolean;
+}): Promise<User | null> {
+  const db = await readDb();
+  const user = db.users.find((u) => u.id === input.userId);
+  if (!user) return null;
+  if (input.locale) user.locale = input.locale;
+  if (input.preferredLanguage) {
+    user.preferredLanguage = normalizeSpokenLanguage(input.preferredLanguage);
+  }
+  if (typeof input.audioGuidance === "boolean") {
+    user.audioGuidance = input.audioGuidance;
+  }
+  await writeDb(db);
+  return user;
+}
+
+export async function updateAdvocateCounties(
+  userId: string,
+  counties: string[],
+): Promise<User | null> {
+  const db = await readDb();
+  const user = db.users.find((u) => u.id === userId);
+  if (!user || user.role !== "advocate") return null;
+  user.advocateCounties = counties;
+  await writeDb(db);
+  return user;
+}
+
+export async function listActiveAdvocates(): Promise<User[]> {
+  const db = await readDb();
+  return db.users.filter((u) => u.role === "advocate" && !u.advocateSuspended);
+}
+
 export function uploadsDir(): string {
   return path.join(DATA_DIR, "uploads");
+}
+
+export function testamentUploadsDir(): string {
+  return path.join(DATA_DIR, "uploads", "testaments");
 }
 
 export function advocateUploadsDir(): string {

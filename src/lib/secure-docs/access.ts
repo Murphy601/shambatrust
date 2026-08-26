@@ -1,12 +1,17 @@
 import { readSession, type SessionPayload } from "@/lib/auth/session";
 import {
   getAsset,
+  getAudioTestament,
   getLegalDocument,
   getReviewRequest,
   getSuccessionCase,
   getVaultById,
+  listAgentLinks,
+  listReleasedCasesForUser,
+  listReviewRequests,
+  listSuccessionCasesForVault,
 } from "@/lib/db/store";
-import type { ReviewRequest } from "@/lib/db/types";
+import type { AudioTestament, ReviewRequest } from "@/lib/db/types";
 
 export async function requireAdminAccess(): Promise<
   | { ok: true; session: SessionPayload }
@@ -50,7 +55,77 @@ export type SecureDocTarget =
   | { kind: "asset"; assetId: string; reviewId: string }
   | { kind: "legal"; documentId: string; reviewId: string }
   | { kind: "asset_admin"; assetId: string; vaultId: string }
-  | { kind: "death_cert"; caseId: string };
+  | { kind: "death_cert"; caseId: string }
+  | { kind: "death_notification"; caseId: string };
+
+/**
+ * Who may play back a voice testament: the vault owner, their active family
+ * agent, ops, and any advocate currently working the vault — either on an open
+ * review or on the succession case that followed it.
+ */
+export async function resolveAudioTestamentAccess(
+  session: SessionPayload,
+  testamentId: string,
+): Promise<
+  | { ok: true; testament: AudioTestament }
+  | { ok: false; status: number; error: string }
+> {
+  const testament = await getAudioTestament(testamentId);
+  if (!testament) {
+    return { ok: false, status: 404, error: "Recording not found." };
+  }
+
+  const vault = await getVaultById(testament.vaultId);
+  if (!vault) {
+    return { ok: false, status: 404, error: "Vault not found." };
+  }
+
+  if (session.role === "admin") return { ok: true, testament };
+  if (vault.ownerId === session.userId) return { ok: true, testament };
+
+  const agentLinks = await listAgentLinks(vault.id);
+  if (
+    agentLinks.some(
+      (link) => link.status === "active" && link.agentUserId === session.userId,
+    )
+  ) {
+    return { ok: true, testament };
+  }
+
+  if (session.role === "advocate") {
+    const reviews = await listReviewRequests(vault.id);
+    if (reviews.some((review) => advocateHasDocAccess(review, session.userId))) {
+      return { ok: true, testament };
+    }
+    const cases = await listSuccessionCasesForVault(vault.id);
+    if (
+      cases.some(
+        (successionCase) =>
+          successionCase.advocateId === session.userId &&
+          (successionCase.status === "with_advocate" ||
+            successionCase.status === "succession_completed"),
+      )
+    ) {
+      return { ok: true, testament };
+    }
+  }
+
+  // Executors of a released vault — the whole point of the recording is that
+  // the family eventually hears it in the elder's own voice.
+  const releases = await listReleasedCasesForUser({
+    userId: session.userId,
+    phone: session.phone,
+  });
+  if (releases.some((release) => release.vaultId === vault.id)) {
+    return { ok: true, testament };
+  }
+
+  return {
+    ok: false,
+    status: 403,
+    error: "Not authorised to play this recording.",
+  };
+}
 
 export async function resolveSecureDocAccess(
   session: SessionPayload,
@@ -65,10 +140,20 @@ export async function resolveSecureDocAccess(
     }
   | { ok: false; status: number; error: string }
 > {
-  if (target.kind === "death_cert") {
+  if (target.kind === "death_cert" || target.kind === "death_notification") {
+    const isNotification = target.kind === "death_notification";
     const successionCase = await getSuccessionCase(target.caseId);
-    if (!successionCase?.deathCertificatePath) {
-      return { ok: false, status: 404, error: "Death certificate not found." };
+    const filename = isNotification
+      ? successionCase?.deathNotificationPath
+      : successionCase?.deathCertificatePath;
+    if (!successionCase || !filename) {
+      return {
+        ok: false,
+        status: 404,
+        error: isNotification
+          ? "Death notification not found."
+          : "Death certificate not found.",
+      };
     }
     const allowed =
       session.role === "admin" ||
@@ -82,14 +167,19 @@ export async function resolveSecureDocAccess(
       return {
         ok: false,
         status: 403,
-        error: "Not authorised to view this death certificate.",
+        error: isNotification
+          ? "Not authorised to view this death notification."
+          : "Not authorised to view this death certificate.",
       };
     }
+    const displayName = isNotification
+      ? successionCase.deathNotificationName || "Death notification"
+      : successionCase.deathCertificateName || "Death certificate";
     return {
       ok: true,
       vaultId: successionCase.vaultId,
-      filename: successionCase.deathCertificatePath,
-      displayName: successionCase.deathCertificateName || "Death certificate",
+      filename,
+      displayName,
       watermarkLabel: `${session.fullName || session.role} · view-only`,
     };
   }
