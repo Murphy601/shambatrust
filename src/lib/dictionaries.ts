@@ -6,12 +6,106 @@ export const dictionaries = {
     tagline: "Ancestral Asset Digitization & Estate Succession Vault",
     nav: {
       how: "How it works",
+      stories: "Success stories",
       audit: "Family Peace Audit",
       pricing: "Pricing",
       trust: "Why trust us",
       contact: "Contact",
     },
     langToggle: "Kiswahili",
+    carousel: {
+      previous: "Previous",
+      next: "Next",
+      goToSlide: "Go to slide",
+      pauseHint: "Rotates automatically — hover, focus, or swipe to take control.",
+    },
+    journey: {
+      title: "Your onboarding journey",
+      subtitle:
+        "Four guided steps from a drawer full of paper to a sealed, advocate-verified vault.",
+      stepLabel: "Step",
+      of: "of",
+      cta: "Start step 1",
+      steps: [
+        {
+          title: "Asset inventory & GPS pinning",
+          body: "List every shamba, plot, business, vehicle, SACCO, and account. Capture the title number, ArdhiSasa parcel and block, and drop a GPS pin on the boundary.",
+          detail: "Takes about 20 minutes. A son or daughter can help in Agent Mode.",
+        },
+        {
+          title: "Will or trust selection",
+          body: "Name your heirs, set percentages or specific gifts, and choose whether your estate passes by will, family land trust, or power of attorney.",
+          detail: "Free to edit as a draft. You are only charged when you submit.",
+        },
+        {
+          title: "LSK advocate verification",
+          body: "We route your dossier to verified Law Society of Kenya advocates practising in your county. They check the title, stamp the instrument, and sign it digitally.",
+          detail: "Matched by county automatically — no cold calling for a lawyer.",
+        },
+        {
+          title: "Secured vault & beneficiary access",
+          body: "Your sealed binder is stored encrypted. When the day comes, trustees and guardians verify the death before executors are given access.",
+          detail: "Every view, edit, and download is written to an audit trail.",
+        },
+      ],
+    },
+    stories: {
+      title: "Success stories from across the counties",
+      subtitle:
+        "Verified outcomes from families who secured their land before a dispute started. Names are shortened at each family's request.",
+      verified: "Verified with the family",
+      outcomeLabel: "Outcome",
+      items: [
+        {
+          quote:
+            "My four sons each knew which portion was theirs before I signed. The advocate confirmed the title in Kiambu and sealed everything the same week.",
+          name: "Mzee J. Ngugi",
+          county: "Kiambu County",
+          detail: "3 shambas · 4 heirs",
+          outcome: "Boundaries agreed before any transfer began",
+        },
+        {
+          quote:
+            "We had two title deeds in a suitcase and no will. Now the deeds are scanned, the trustees are named, and my mother stopped worrying.",
+          name: "Wanjiru M.",
+          county: "Nakuru County",
+          detail: "Family helper · Agent Mode",
+          outcome: "Deeds digitised and trustees appointed",
+        },
+        {
+          quote:
+            "My father recorded his wishes in Kalenjin. Hearing his own voice ended the argument my uncles were starting.",
+          name: "Kiprotich A.",
+          county: "Uasin Gishu (Eldoret)",
+          detail: "Voice testament · transcribed",
+          outcome: "Family dispute settled without court",
+        },
+        {
+          quote:
+            "The SACCO nomination and the will finally said the same thing. Before this, they contradicted each other.",
+          name: "Achieng' O.",
+          county: "Kisumu County",
+          detail: "SACCO + bank accounts",
+          outcome: "Nominee percentages aligned with the will",
+        },
+        {
+          quote:
+            "A buyer claimed our plot had been sold twice. The title search and our sealed binder settled it in one meeting.",
+          name: "Mutua K.",
+          county: "Machakos County",
+          detail: "Commercial plot · title search",
+          outcome: "Fraudulent double allocation stopped",
+        },
+        {
+          quote:
+            "When my father passed, two trustees and two guardians confirmed before anything opened. Nobody could rush it.",
+          name: "Njeri W.",
+          county: "Murang'a County",
+          detail: "Succession activated",
+          outcome: "Vault released only after dual verification",
+        },
+      ],
+    },
     hero: {
       headline:
         "You Spent 40 Years Building Your Family's Legacy. Protect It Forever.",
@@ -193,12 +287,107 @@ export const dictionaries = {
     tagline: "Hifadhi ya Mali za Urithi na Mpango wa Mirathi",
     nav: {
       how: "Jinsi inavyofanya kazi",
+      stories: "Hadithi za mafanikio",
       audit: "Ukaguzi wa Amani ya Familia",
       pricing: "Bei",
       trust: "Kwa nini tutumaini",
       contact: "Wasiliana",
     },
     langToggle: "English",
+    carousel: {
+      previous: "Iliyotangulia",
+      next: "Ifuatayo",
+      goToSlide: "Nenda kwa slaidi",
+      pauseHint:
+        "Hubadilika yenyewe — weka kishale, bofya, au telezesha ili kudhibiti.",
+    },
+    journey: {
+      title: "Safari yako ya kuanza",
+      subtitle:
+        "Hatua nne kutoka droo iliyojaa karatasi hadi hifadhi iliyotiwa muhuri na wakili.",
+      stepLabel: "Hatua",
+      of: "kati ya",
+      cta: "Anza hatua ya 1",
+      steps: [
+        {
+          title: "Orodha ya mali na alama ya GPS",
+          body: "Orodhesha kila shamba, kiwanja, biashara, gari, SACCO, na akaunti. Andika nambari ya hati, kiwanja na block cha ArdhiSasa, na weka alama ya GPS kwenye mpaka.",
+          detail: "Huchukua dakika 20 hivi. Mwana au binti anaweza kusaidia kwa Hali ya Wakala.",
+        },
+        {
+          title: "Chagua wosia au amana",
+          body: "Taja warithi, weka asilimia au zawadi maalum, na uchague kama mali yako itapita kwa wosia, amana ya ardhi ya familia, au uwakilishi wa nguvu.",
+          detail: "Kuhariri rasimu ni bure. Utatozwa tu unapowasilisha.",
+        },
+        {
+          title: "Uthibitisho wa wakili wa LSK",
+          body: "Tunapeleka jalada lako kwa mawakili wa Law Society of Kenya wanaofanya kazi katika kaunti yako. Wanakagua hati, wanatia muhuri, na kusaini kidijitali.",
+          detail: "Unalinganishwa kwa kaunti kiotomatiki — hakuna kutafuta wakili mwenyewe.",
+        },
+        {
+          title: "Hifadhi salama na ufikiaji wa warithi",
+          body: "Kitabu chako kilichotiwa muhuri huhifadhiwa kwa usimbaji fiche. Siku ikifika, amana na walezi huthibitisha kifo kabla ya watekelezaji kupewa ufikiaji.",
+          detail: "Kila kuangalia, kuhariri, na kupakua huandikwa kwenye kumbukumbu.",
+        },
+      ],
+    },
+    stories: {
+      title: "Hadithi za mafanikio kutoka kaunti mbalimbali",
+      subtitle:
+        "Matokeo yaliyothibitishwa kutoka familia zilizolinda ardhi yao kabla ya mgogoro kuanza. Majina yamefupishwa kwa ombi la kila familia.",
+      verified: "Imethibitishwa na familia",
+      outcomeLabel: "Matokeo",
+      items: [
+        {
+          quote:
+            "Wanangu wanne kila mmoja alijua sehemu yake kabla sijasaini. Wakili alithibitisha hati Kiambu na kutia muhuri kila kitu wiki hiyo hiyo.",
+          name: "Mzee J. Ngugi",
+          county: "Kaunti ya Kiambu",
+          detail: "Mashamba 3 · warithi 4",
+          outcome: "Mipaka ilikubaliwa kabla ya uhamisho wowote",
+        },
+        {
+          quote:
+            "Tulikuwa na hati mbili kwenye sanduku na hakuna wosia. Sasa hati zimeskaniwa, amana wametajwa, na mama yangu ameacha wasiwasi.",
+          name: "Wanjiru M.",
+          county: "Kaunti ya Nakuru",
+          detail: "Msaidizi wa familia · Hali ya Wakala",
+          outcome: "Hati zimehifadhiwa kidijitali na amana kuteuliwa",
+        },
+        {
+          quote:
+            "Baba yangu alirekodi matakwa yake kwa Kalenjin. Kusikia sauti yake mwenyewe kulimaliza ugomvi ambao wajomba zangu walikuwa wanaanzisha.",
+          name: "Kiprotich A.",
+          county: "Uasin Gishu (Eldoret)",
+          detail: "Wosia wa sauti · umeandikwa",
+          outcome: "Mgogoro wa familia ulitatuliwa bila mahakama",
+        },
+        {
+          quote:
+            "Uteuzi wa SACCO na wosia hatimaye vilisema kitu kimoja. Kabla ya hapo, vilikinzana.",
+          name: "Achieng' O.",
+          county: "Kaunti ya Kisumu",
+          detail: "SACCO na akaunti za benki",
+          outcome: "Asilimia za wateule zililingana na wosia",
+        },
+        {
+          quote:
+            "Mnunuzi alidai kiwanja chetu kiliuzwa mara mbili. Utafutaji wa hati na kitabu chetu kilichotiwa muhuri vilimaliza hilo kwa mkutano mmoja.",
+          name: "Mutua K.",
+          county: "Kaunti ya Machakos",
+          detail: "Kiwanja cha biashara · utafutaji wa hati",
+          outcome: "Ugawaji maradufu wa udanganyifu ulizuiwa",
+        },
+        {
+          quote:
+            "Baba yangu alipofariki, amana wawili na walezi wawili walithibitisha kabla ya chochote kufunguliwa. Hakuna aliyeweza kuharakisha.",
+          name: "Njeri W.",
+          county: "Kaunti ya Murang'a",
+          detail: "Mirathi imeanzishwa",
+          outcome: "Hifadhi ilifunguliwa baada tu ya uthibitisho maradufu",
+        },
+      ],
+    },
     hero: {
       headline:
         "Umetumia Miaka 40 Kujenga Urithi wa Familia Yako. Ulinde Milele.",

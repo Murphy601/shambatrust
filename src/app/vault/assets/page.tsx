@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useLocale } from "@/components/locale-provider";
 import { vaultCopy } from "@/lib/vault-copy";
-import { assetSummary } from "@/lib/asset-fields";
+import { assetSummary, nomineeTotal, parcelIdentifiers } from "@/lib/asset-fields";
 import type { Asset } from "@/lib/db/types";
 
 export default function AssetsPage() {
@@ -100,6 +100,35 @@ export default function AssetsPage() {
                     <p className="mt-2 text-base text-muted">
                       {assetSummary(asset, locale)}
                     </p>
+                    {parcelIdentifiers(asset, locale).length > 0 && (
+                      <dl className="mt-3 grid gap-x-4 gap-y-1 text-base sm:grid-cols-2">
+                        {parcelIdentifiers(asset, locale).map((row) => (
+                          <div key={row.label} className="flex gap-2">
+                            <dt className="font-semibold text-ink">{row.label}:</dt>
+                            <dd className="text-muted">{row.value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    )}
+                    {asset.type === "sacco" && asset.saccoNominees.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-base font-semibold text-ink">
+                          {locale === "sw" ? "Wateule" : "Nominees"} (
+                          {nomineeTotal(asset.saccoNominees)}%)
+                        </p>
+                        <ul className="mt-1 space-y-1 text-base text-muted">
+                          {asset.saccoNominees.map((nominee) => (
+                            <li key={nominee.id}>
+                              {nominee.fullName}
+                              {nominee.relationship
+                                ? ` — ${nominee.relationship}`
+                                : ""}{" "}
+                              · {nominee.percentage}%
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                     {asset.documentName && (
                       <p className="mt-1 text-base text-forest">
                         Document: {asset.documentName}

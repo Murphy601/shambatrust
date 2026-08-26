@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useLocale } from "@/components/locale-provider";
 import { vaultCopy } from "@/lib/vault-copy";
 import { isLandLike, uploadLabel } from "@/lib/asset-fields";
+import { KENYA_COUNTIES } from "@/lib/kenya-counties";
 import type { AssetType } from "@/lib/db/types";
 
 const TYPES: AssetType[] = [
@@ -13,8 +14,25 @@ const TYPES: AssetType[] = [
   "business",
   "vehicle",
   "bank_account",
+  "sacco",
   "other",
 ];
+
+type NomineeDraft = {
+  fullName: string;
+  idNumber: string;
+  phone: string;
+  relationship: string;
+  percentage: string;
+};
+
+const emptyNominee = (): NomineeDraft => ({
+  fullName: "",
+  idNumber: "",
+  phone: "",
+  relationship: "",
+  percentage: "",
+});
 
 export default function NewAssetPage() {
   const { locale } = useLocale();
@@ -31,6 +49,10 @@ export default function NewAssetPage() {
   const [landmark, setLandmark] = useState("");
   const [gpsLat, setGpsLat] = useState("");
   const [gpsLng, setGpsLng] = useState("");
+  const [parcelNumber, setParcelNumber] = useState("");
+  const [blockNumber, setBlockNumber] = useState("");
+  const [registrationSection, setRegistrationSection] = useState("");
+  const [landRegistryOffice, setLandRegistryOffice] = useState("");
   const [registrationNumber, setRegistrationNumber] = useState("");
   const [makeModel, setMakeModel] = useState("");
   const [year, setYear] = useState("");
@@ -39,17 +61,66 @@ export default function NewAssetPage() {
   const [accountType, setAccountType] = useState("");
   const [businessRegNumber, setBusinessRegNumber] = useState("");
   const [kraPin, setKraPin] = useState("");
+  const [saccoName, setSaccoName] = useState("");
+  const [saccoMemberNumber, setSaccoMemberNumber] = useState("");
+  const [mpesaNumber, setMpesaNumber] = useState("");
+  const [nominees, setNominees] = useState<NomineeDraft[]>([]);
   const [documentName, setDocumentName] = useState<string | null>(null);
   const [documentPath, setDocumentPath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  const nomineeTotalPercent = nominees.reduce(
+    (sum, nominee) => sum + (Number(nominee.percentage) || 0),
+    0,
+  );
+
+  function resetForm() {
+    setStep(1);
+    setTitle("");
+    setNotes("");
+    setTitleNumber("");
+    setCounty("");
+    setSubCounty("");
+    setLandmark("");
+    setGpsLat("");
+    setGpsLng("");
+    setParcelNumber("");
+    setBlockNumber("");
+    setRegistrationSection("");
+    setLandRegistryOffice("");
+    setRegistrationNumber("");
+    setMakeModel("");
+    setYear("");
+    setBankName("");
+    setAccountNumber("");
+    setAccountType("");
+    setBusinessRegNumber("");
+    setKraPin("");
+    setSaccoName("");
+    setSaccoMemberNumber("");
+    setMpesaNumber("");
+    setNominees([]);
+    setDocumentName(null);
+    setDocumentPath(null);
+    setError(null);
+  }
+
+  function updateNominee(index: number, patch: Partial<NomineeDraft>) {
+    setNominees((current) =>
+      current.map((nominee, i) =>
+        i === index ? { ...nominee, ...patch } : nominee,
+      ),
+    );
+  }
+
   function titlePlaceholder() {
     if (isLandLike(type)) return sw ? "mf. Shamba la Nyeri" : "e.g. Nyeri family shamba";
     if (type === "vehicle") return sw ? "mf. Toyota Premio ya baba" : "e.g. Father's Toyota Premio";
     if (type === "bank_account") return sw ? "mf. Akaunti ya Equity" : "e.g. Equity savings account";
     if (type === "business") return sw ? "mf. Duka la Familia" : "e.g. Family shop / company";
+    if (type === "sacco") return sw ? "mf. Akaunti ya Stima SACCO" : "e.g. Stima SACCO deposits";
     return sw ? "mf. Maelezo mafupi" : "e.g. Short description";
   }
 
@@ -59,6 +130,14 @@ export default function NewAssetPage() {
     if (type === "vehicle") return Boolean(registrationNumber.trim());
     if (type === "bank_account") return Boolean(bankName.trim() && accountNumber.trim());
     if (type === "business") return Boolean(businessRegNumber.trim() || kraPin.trim());
+    if (type === "sacco") {
+      if (!saccoName.trim()) return false;
+      if (nominees.length === 0) return true;
+      return (
+        nominees.every((nominee) => nominee.fullName.trim()) &&
+        Math.round(nomineeTotalPercent) === 100
+      );
+    }
     return true;
   }
 
@@ -96,6 +175,10 @@ export default function NewAssetPage() {
           landmark: isLandLike(type) ? landmark : "",
           gpsLat: isLandLike(type) && gpsLat ? Number(gpsLat) : null,
           gpsLng: isLandLike(type) && gpsLng ? Number(gpsLng) : null,
+          parcelNumber: isLandLike(type) ? parcelNumber : "",
+          blockNumber: isLandLike(type) ? blockNumber : "",
+          registrationSection: isLandLike(type) ? registrationSection : "",
+          landRegistryOffice: isLandLike(type) ? landRegistryOffice : "",
           registrationNumber: type === "vehicle" ? registrationNumber : "",
           makeModel: type === "vehicle" ? makeModel : "",
           year: type === "vehicle" ? year : "",
@@ -104,6 +187,19 @@ export default function NewAssetPage() {
           accountType: type === "bank_account" ? accountType : "",
           businessRegNumber: type === "business" ? businessRegNumber : "",
           kraPin: type === "business" ? kraPin : "",
+          saccoName: type === "sacco" ? saccoName : "",
+          saccoMemberNumber: type === "sacco" ? saccoMemberNumber : "",
+          mpesaNumber: type === "sacco" ? mpesaNumber : "",
+          saccoNominees:
+            type === "sacco"
+              ? nominees.map((nominee) => ({
+                  fullName: nominee.fullName.trim(),
+                  idNumber: nominee.idNumber.trim(),
+                  phone: nominee.phone.trim(),
+                  relationship: nominee.relationship.trim(),
+                  percentage: Number(nominee.percentage) || 0,
+                }))
+              : [],
         }),
       });
       const data = await res.json();
@@ -133,25 +229,7 @@ export default function NewAssetPage() {
             className="btn btn-secondary-dark"
             onClick={() => {
               setSaved(false);
-              setStep(1);
-              setTitle("");
-              setNotes("");
-              setTitleNumber("");
-              setCounty("");
-              setSubCounty("");
-              setLandmark("");
-              setGpsLat("");
-              setGpsLng("");
-              setRegistrationNumber("");
-              setMakeModel("");
-              setYear("");
-              setBankName("");
-              setAccountNumber("");
-              setAccountType("");
-              setBusinessRegNumber("");
-              setKraPin("");
-              setDocumentName(null);
-              setDocumentPath(null);
+              resetForm();
             }}
           >
             {t.addAnotherAsset}
@@ -289,6 +367,234 @@ export default function NewAssetPage() {
                     onChange={(e) => setLandmark(e.target.value)}
                   />
                 </div>
+
+                <fieldset className="rounded-[0.35rem] border-2 border-border p-4">
+                  <legend className="px-2 text-base font-semibold text-forest-deep">
+                    {sw
+                      ? "Utambulisho wa ArdhiSasa (si lazima)"
+                      : "ArdhiSasa parcel search (optional)"}
+                  </legend>
+                  <p className="text-base text-muted">
+                    {sw
+                      ? "Nakili haya kutoka kwa hati miliki yako. Husaidia wakili kupata kiwanja haraka."
+                      : "Copy these from your title deed. They let your advocate find the parcel on the first search."}
+                  </p>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="field-label" htmlFor="parcelNumber">
+                        {sw ? "Nambari ya kiwanja" : "Parcel number"}
+                      </label>
+                      <input
+                        id="parcelNumber"
+                        className="field"
+                        value={parcelNumber}
+                        onChange={(e) => setParcelNumber(e.target.value)}
+                        placeholder={sw ? "mf. 1234" : "e.g. 1234"}
+                      />
+                    </div>
+                    <div>
+                      <label className="field-label" htmlFor="blockNumber">
+                        {sw ? "Nambari ya block" : "Parcel block number"}
+                      </label>
+                      <input
+                        id="blockNumber"
+                        className="field"
+                        value={blockNumber}
+                        onChange={(e) => setBlockNumber(e.target.value)}
+                        placeholder={sw ? "mf. Block 12" : "e.g. Block 12"}
+                      />
+                    </div>
+                    <div>
+                      <label className="field-label" htmlFor="registrationSection">
+                        {sw ? "Sehemu ya usajili" : "Registration section"}
+                      </label>
+                      <input
+                        id="registrationSection"
+                        className="field"
+                        value={registrationSection}
+                        onChange={(e) => setRegistrationSection(e.target.value)}
+                        placeholder={sw ? "mf. Ngong" : "e.g. Ngong"}
+                      />
+                    </div>
+                    <div>
+                      <label className="field-label" htmlFor="landRegistryOffice">
+                        {sw
+                          ? "Ofisi ya ardhi ya kaunti"
+                          : "County land registry office"}
+                      </label>
+                      <input
+                        id="landRegistryOffice"
+                        className="field"
+                        list="county-registry-list"
+                        value={landRegistryOffice}
+                        onChange={(e) => setLandRegistryOffice(e.target.value)}
+                        placeholder={sw ? "mf. Kajiado" : "e.g. Kajiado"}
+                      />
+                      <datalist id="county-registry-list">
+                        {KENYA_COUNTIES.map((name) => (
+                          <option key={name} value={name} />
+                        ))}
+                      </datalist>
+                    </div>
+                  </div>
+                </fieldset>
+              </>
+            )}
+
+            {type === "sacco" && (
+              <>
+                <div>
+                  <label className="field-label" htmlFor="saccoName">
+                    {sw ? "Jina la SACCO" : "SACCO name"}
+                  </label>
+                  <input
+                    id="saccoName"
+                    className="field"
+                    required
+                    value={saccoName}
+                    onChange={(e) => setSaccoName(e.target.value)}
+                    placeholder={sw ? "mf. Stima SACCO" : "e.g. Stima SACCO"}
+                  />
+                </div>
+                <div>
+                  <label className="field-label" htmlFor="saccoMemberNumber">
+                    {sw ? "Nambari ya mwanachama" : "Member / account ID"}
+                  </label>
+                  <input
+                    id="saccoMemberNumber"
+                    className="field"
+                    value={saccoMemberNumber}
+                    onChange={(e) => setSaccoMemberNumber(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="field-label" htmlFor="mpesaNumber">
+                    {sw
+                      ? "Nambari ya M-Pesa iliyounganishwa (si lazima)"
+                      : "Linked M-Pesa number (optional)"}
+                  </label>
+                  <input
+                    id="mpesaNumber"
+                    className="field"
+                    value={mpesaNumber}
+                    onChange={(e) => setMpesaNumber(e.target.value)}
+                    placeholder="+2547…"
+                    inputMode="tel"
+                  />
+                </div>
+
+                <fieldset className="rounded-[0.35rem] border-2 border-border p-4">
+                  <legend className="px-2 text-base font-semibold text-forest-deep">
+                    {sw ? "Wateule wa SACCO" : "SACCO nominees"}
+                  </legend>
+                  <p className="text-base text-muted">
+                    {sw
+                      ? "Sheria za SACCO hulipa wateule moja kwa moja. Asilimia lazima zifike 100% ili zilingane na wosia wako."
+                      : "SACCO bylaws pay nominees directly, outside the estate. Shares must total 100% so they cannot contradict your will."}
+                  </p>
+                  <ul className="mt-4 space-y-4">
+                    {nominees.map((nominee, index) => (
+                      <li
+                        key={index}
+                        className="grid gap-3 rounded-[0.35rem] border border-border p-3 sm:grid-cols-2"
+                      >
+                        <input
+                          className="field"
+                          aria-label={sw ? "Jina kamili" : "Nominee full name"}
+                          placeholder={sw ? "Jina kamili" : "Full name"}
+                          value={nominee.fullName}
+                          onChange={(e) =>
+                            updateNominee(index, { fullName: e.target.value })
+                          }
+                          required
+                        />
+                        <input
+                          className="field"
+                          aria-label={sw ? "Uhusiano" : "Relationship"}
+                          placeholder={sw ? "Uhusiano" : "Relationship"}
+                          value={nominee.relationship}
+                          onChange={(e) =>
+                            updateNominee(index, { relationship: e.target.value })
+                          }
+                        />
+                        <input
+                          className="field"
+                          aria-label={sw ? "Nambari ya ID" : "ID number"}
+                          placeholder={sw ? "Nambari ya ID" : "ID number"}
+                          value={nominee.idNumber}
+                          onChange={(e) =>
+                            updateNominee(index, { idNumber: e.target.value })
+                          }
+                        />
+                        <input
+                          className="field"
+                          aria-label={sw ? "Simu" : "Phone"}
+                          placeholder="+2547…"
+                          inputMode="tel"
+                          value={nominee.phone}
+                          onChange={(e) =>
+                            updateNominee(index, { phone: e.target.value })
+                          }
+                        />
+                        <div className="flex gap-2">
+                          <input
+                            className="field"
+                            aria-label={sw ? "Asilimia" : "Percentage"}
+                            placeholder="%"
+                            inputMode="decimal"
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={nominee.percentage}
+                            onChange={(e) =>
+                              updateNominee(index, { percentage: e.target.value })
+                            }
+                            required
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-secondary-dark"
+                            aria-label={sw ? "Ondoa mteule" : "Remove nominee"}
+                            onClick={() =>
+                              setNominees((current) =>
+                                current.filter((_, i) => i !== index),
+                              )
+                            }
+                          >
+                            ×
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      className="btn btn-secondary-dark"
+                      onClick={() =>
+                        setNominees((current) => [...current, emptyNominee()])
+                      }
+                    >
+                      {sw ? "Ongeza mteule" : "Add nominee"}
+                    </button>
+                    {nominees.length > 0 && (
+                      <p
+                        className={`text-base font-semibold ${
+                          Math.round(nomineeTotalPercent) === 100
+                            ? "text-forest"
+                            : "text-[var(--danger)]"
+                        }`}
+                      >
+                        {sw ? "Jumla" : "Total"}: {nomineeTotalPercent}%
+                        {Math.round(nomineeTotalPercent) === 100
+                          ? " ✓"
+                          : sw
+                            ? " — lazima iwe 100%"
+                            : " — must be 100%"}
+                      </p>
+                    )}
+                  </div>
+                </fieldset>
               </>
             )}
 

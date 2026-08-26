@@ -1,3 +1,5 @@
+import type { SpokenLanguage } from "@/lib/languages";
+
 export type UserRole = "elder" | "agent" | "advocate" | "admin";
 
 export type OpsSeatRole = "super" | "reviewer" | "finance" | "compliance";
@@ -11,6 +13,7 @@ export type AssetType =
   | "business"
   | "vehicle"
   | "bank_account"
+  | "sacco"
   | "other";
 
 export type VaultStatus = "draft" | "pending_review" | "in_review" | "sealed";
@@ -33,6 +36,13 @@ export type User = {
   fullName: string;
   role: UserRole;
   locale: "en" | "sw";
+  /**
+   * Mother tongue used for audio-guided forms and voice testaments.
+   * Independent of `locale`, which only drives the translated UI chrome.
+   */
+  preferredLanguage: SpokenLanguage;
+  /** Elder opted into spoken prompts on long forms */
+  audioGuidance: boolean;
   /** Elder signup KYC — national ID scans */
   idFrontName: string | null;
   idFrontPath: string | null;
@@ -49,6 +59,8 @@ export type User = {
   advocateLicense: string | null;
   /** Ops desk seat (admins only) */
   opsSeat: OpsSeatRole | null;
+  /** Counties an advocate practises in — drives automated case matching */
+  advocateCounties: string[];
   /** Advocate CRM */
   advocateSuspended: boolean;
   advocateMaxCases: number | null;
@@ -86,6 +98,21 @@ export type Vault = {
   updatedAt: string;
 };
 
+/**
+ * A SACCO nominee. SACCO bylaws distribute a member's deposits by nominated
+ * percentage outside the estate, so these are recorded per-account and kept
+ * separate from vault `Allocation` rows.
+ */
+export type SaccoNominee = {
+  id: string;
+  fullName: string;
+  idNumber: string;
+  phone: string;
+  relationship: string;
+  /** Share of this SACCO account, 0–100 */
+  percentage: number;
+};
+
 export type Asset = {
   id: string;
   vaultId: string;
@@ -101,6 +128,11 @@ export type Asset = {
   landmark: string;
   gpsLat: number | null;
   gpsLng: number | null;
+  // Land / commercial plot — ArdhiSasa parcel search identifiers
+  parcelNumber: string;
+  blockNumber: string;
+  registrationSection: string;
+  landRegistryOffice: string;
   // Vehicle
   registrationNumber: string;
   makeModel: string;
@@ -112,6 +144,11 @@ export type Asset = {
   // Business
   businessRegNumber: string;
   kraPin: string;
+  // SACCO / mobile money
+  saccoName: string;
+  saccoMemberNumber: string;
+  saccoNominees: SaccoNominee[];
+  mpesaNumber: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -197,6 +234,52 @@ export type LegalDocument = {
   signatureName: string | null;
   signedAt: string | null;
   signedByUserId: string | null;
+  /** Advocate legal stamp — applied before e-signature */
+  stampRef: string | null;
+  stampedAt: string | null;
+  stampedByUserId: string | null;
+  stampAdvocateName: string;
+  stampLskNumber: string;
+  stampCounty: string;
+  stampNotes: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TranscriptStatus =
+  | "pending"
+  | "in_progress"
+  | "transcribed"
+  | "rejected";
+
+/**
+ * A spoken instruction recorded by (or for) an elder, in their own language.
+ *
+ * The recording is evidence of intent that supports the written dossier; it is
+ * never a substitute for the advocate-drafted will. Transcripts are entered by
+ * ops or the assigned advocate and attached to the case.
+ */
+export type AudioTestament = {
+  id: string;
+  vaultId: string;
+  /** Optional link to a specific asset the elder was speaking about */
+  assetId: string | null;
+  recordedByUserId: string;
+  /** True when a family agent captured the recording on the elder's behalf */
+  recordedByAgent: boolean;
+  title: string;
+  language: SpokenLanguage;
+  documentName: string;
+  /** Relative filename under uploads/testaments/ */
+  documentPath: string;
+  mimeType: string;
+  fileSize: number;
+  durationSeconds: number | null;
+  transcript: string;
+  transcriptStatus: TranscriptStatus;
+  transcribedByUserId: string | null;
+  transcribedAt: string | null;
+  transcriptNotes: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -338,13 +421,30 @@ export type ExecutionTrustee = {
   idNumber: string;
 };
 
+/**
+ * A guardian is a second, independent confirmation layer on top of trustees.
+ * Trustees start the claim; guardians (typically the two most senior
+ * beneficiaries) must separately confirm before ops will look at the case.
+ */
+export type ExecutionGuardian = {
+  fullName: string;
+  phone: string;
+  idNumber: string;
+  relationship: string;
+};
+
 export type ExecutionPlan = {
   id: string;
   vaultId: string;
   triggerType: "upon_death";
   trustees: ExecutionTrustee[];
   minTrusteeApprovals: number;
+  guardians: ExecutionGuardian[];
+  /** Distinct guardians who must confirm; the dual-guardian rule defaults to 2 */
+  minGuardianApprovals: number;
   requireDeathCertificate: boolean;
+  /** Chief's / hospital death notification form, separate from the certificate */
+  requireDeathNotification: boolean;
   coolingHours: number;
   updatedAt: string;
   updatedByUserId: string;
@@ -353,6 +453,7 @@ export type ExecutionPlan = {
 export type SuccessionCaseStatus =
   | "succession_filed"
   | "awaiting_trustee_otps"
+  | "awaiting_guardian_confirmations"
   | "pending_ops_verification"
   | "succession_verified"
   | "with_advocate"
@@ -367,19 +468,28 @@ export type SuccessionCase = {
   deathDate: string;
   deathCertificateName: string | null;
   deathCertificatePath: string | null;
+  deathNotificationName: string | null;
+  deathNotificationPath: string | null;
   filerNotes: string;
   opsReviewedByUserId: string | null;
   opsDecisionAt: string | null;
   opsNotes: string;
   advocateId: string | null;
   coolingEndsAt: string | null;
+  /** Set when ops release the sealed vault to the appointed executors */
+  vaultReleasedAt: string | null;
+  vaultReleasedByUserId: string | null;
+  releaseNotes: string;
   createdAt: string;
   updatedAt: string;
 };
 
+export type SuccessionApprovalRole = "trustee" | "guardian";
+
 export type SuccessionApproval = {
   id: string;
   caseId: string;
+  role: SuccessionApprovalRole;
   trusteePhone: string;
   trusteeName: string;
   status: "pending" | "approved" | "rejected";
@@ -428,10 +538,34 @@ export type AdvocateApplication = {
   updatedAt: string;
 };
 
+export type AdvocateMatchStatus = "offered" | "claimed" | "expired";
+
+/**
+ * An automated routing offer created when an elder submits for review. Every
+ * advocate covering one of the estate's counties is offered the case; the first
+ * to claim wins and the rest are expired.
+ */
+export type AdvocateMatch = {
+  id: string;
+  reviewRequestId: string;
+  vaultId: string;
+  advocateId: string;
+  /** Counties both the estate and the advocate cover */
+  matchedCounties: string[];
+  /** Higher is a better fit; see lib/advocate/matching.ts */
+  score: number;
+  reason: string;
+  status: AdvocateMatchStatus;
+  createdAt: string;
+  resolvedAt: string | null;
+};
+
 export type Database = {
   users: User[];
   vaults: Vault[];
   assets: Asset[];
+  audioTestaments: AudioTestament[];
+  advocateMatches: AdvocateMatch[];
   beneficiaries: Beneficiary[];
   allocations: Allocation[];
   agentLinks: AgentLink[];

@@ -84,8 +84,35 @@ const copy = {
       business: "Family business",
       vehicle: "Vehicle",
       bank_account: "Bank account",
+      sacco: "SACCO / M-Pesa",
       other: "Other",
     },
+    testament: "Voice testament",
+    testamentTitle: "Voice testament recorder",
+    testamentSubtitle:
+      "Speak your wishes in your own language. Our team transcribes the recording and attaches it to your dossier for the advocate.",
+    testamentRecord: "Start recording",
+    testamentStop: "Stop recording",
+    testamentUpload: "Or upload an audio file",
+    testamentLanguage: "Language spoken",
+    testamentLabel: "What is this recording about?",
+    testamentLinkAsset: "Link to an asset (optional)",
+    testamentSave: "Save to my vault",
+    testamentDiscard: "Discard",
+    testamentEmpty:
+      "No recordings yet. A short 1–2 minute message in your mother tongue is enough.",
+    testamentPending: "Awaiting transcription",
+    testamentDone: "Transcribed",
+    testamentDisclaimer:
+      "A recording supports your written will — it does not replace it. Your advocate still drafts and seals the legal document.",
+    testamentNoMic:
+      "Recording is not available in this browser. Upload an audio file recorded on your phone instead.",
+    languagePrefTitle: "Language & audio guidance",
+    languagePrefSubtitle:
+      "Choose the language you are most comfortable speaking. Forms stay in English or Kiswahili.",
+    languagePrefField: "Preferred spoken language",
+    languagePrefAudio: "Read form questions aloud where my browser supports it",
+    languagePrefSave: "Save preferences",
     reviewTitle: "Request legal verification",
     reviewSubtitle:
       "When your assets, heirs, and allocations are ready, submit for a partner advocate. This is the billable step.",
@@ -178,8 +205,35 @@ const copy = {
       business: "Biashara ya familia",
       vehicle: "Gari",
       bank_account: "Akaunti ya benki",
+      sacco: "SACCO / M-Pesa",
       other: "Nyingine",
     },
+    testament: "Wosia wa sauti",
+    testamentTitle: "Kinasa sauti cha wosia",
+    testamentSubtitle:
+      "Sema matakwa yako kwa lugha yako mwenyewe. Timu yetu itaandika maneno hayo na kuyaambatanisha kwenye jalada lako kwa wakili.",
+    testamentRecord: "Anza kurekodi",
+    testamentStop: "Simamisha kurekodi",
+    testamentUpload: "Au pakia faili la sauti",
+    testamentLanguage: "Lugha unayozungumza",
+    testamentLabel: "Rekodi hii inahusu nini?",
+    testamentLinkAsset: "Ambatanisha na mali (si lazima)",
+    testamentSave: "Hifadhi kwenye hifadhi yangu",
+    testamentDiscard: "Futa",
+    testamentEmpty:
+      "Hakuna rekodi bado. Ujumbe mfupi wa dakika 1–2 kwa lugha yako unatosha.",
+    testamentPending: "Inasubiri kuandikwa",
+    testamentDone: "Imeandikwa",
+    testamentDisclaimer:
+      "Rekodi inasaidia wosia wako ulioandikwa — haichukui nafasi yake. Wakili bado ataandaa na kutia muhuri hati ya kisheria.",
+    testamentNoMic:
+      "Kurekodi hakupatikani kwenye kivinjari hiki. Pakia faili la sauti ulilorekodi kwa simu yako.",
+    languagePrefTitle: "Lugha na mwongozo wa sauti",
+    languagePrefSubtitle:
+      "Chagua lugha unayoizungumza kwa urahisi. Fomu zitabaki kwa Kiingereza au Kiswahili.",
+    languagePrefField: "Lugha unayopendelea kuzungumza",
+    languagePrefAudio: "Soma maswali ya fomu kwa sauti kivinjari kikiruhusu",
+    languagePrefSave: "Hifadhi mapendeleo",
     reviewTitle: "Omba uthibitisho wa kisheria",
     reviewSubtitle:
       "Mali, warithi, na ugawaji vikiwa tayari, wasilisha kwa wakili mshirika. Hii ndiyo hatua inayotozwa.",
