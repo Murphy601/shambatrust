@@ -1,5 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
+  // Production Worker. Do not deploy this from CI.
+  // Custom domains must be attached only to this Worker until a deliberate cutover.
   "name": "shambatrust",
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-08-26",
@@ -15,7 +17,6 @@
   },
   "services": [
     {
-      // Self-reference required by OpenNext revalidation.
       "binding": "WORKER_SELF_REFERENCE",
       "service": "shambatrust",
     },
@@ -23,5 +24,24 @@
   "vars": {
     "NEXT_PUBLIC_WHATSAPP_NUMBER": "254748879579",
     "AUTH_DEV_MODE": "true",
+  },
+  "env": {
+    // Isolated Worker for the GitHub modifications. Own hostname, own
+    // self-reference. No routes / custom domains — those stay on production.
+    "preview": {
+      "name": "shambatrust-new",
+      "workers_dev": true,
+      "preview_urls": true,
+      "vars": {
+        "NEXT_PUBLIC_WHATSAPP_NUMBER": "254748879579",
+        "AUTH_DEV_MODE": "true",
+      },
+      "services": [
+        {
+          "binding": "WORKER_SELF_REFERENCE",
+          "service": "shambatrust-new",
+        },
+      ],
+    },
   },
 }

@@ -147,16 +147,27 @@ Ship from a machine that is logged in to Wrangler (`npx wrangler login`):
 npm run deploy
 ```
 
+That deploys **`shambatrust-new` only** (preview). It never replaces the live `shambatrust` Worker.
+
+There are two Workers:
+
+| Worker | URL | Role |
+| --- | --- | --- |
+| `shambatrust` | `https://shambatrust.mikeal-murphy.workers.dev` | Production. Attach a bought domain here. |
+| `shambatrust-new` | `https://shambatrust-new.mikeal-murphy.workers.dev` | New GitHub modifications. No custom domain. |
+
+They do not share routes, cookies, or storage. OpenNext self-reference on the preview Worker points at itself, not production.
+
+When you buy a domain, add it under **Workers → shambatrust → Settings → Domains & Routes**. Do not attach it to `shambatrust-new`. Production stays up; you cut over later by moving the domain after you accept the new Worker.
+
 ### Cloudflare dashboard (Git)
 
-Connect this GitHub repo in **Workers & Pages**. The defaults work:
+If Git is connected, point it at **`shambatrust-new`** (or use deploy command `npx wrangler deploy --env preview --keep-vars`). Do not connect Git to the production `shambatrust` Worker.
 
 | Setting | Value |
 | --- | --- |
-| Build command | `npm run build` (runs OpenNext, not only `next build`) |
-| Deploy command | `npx wrangler deploy` |
-
-If you override them, use `npx opennextjs-cloudflare build` then `npx opennextjs-cloudflare deploy -- --keep-vars`.
+| Build command | `npx opennextjs-cloudflare build` |
+| Deploy command | `npx wrangler deploy --env preview --keep-vars` |
 
 Set these as both **build** and **runtime** variables/secrets (Workers Builds inlines `NEXT_PUBLIC_*` at build time):
 

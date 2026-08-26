@@ -49,4 +49,4 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
           OPS_ADMIN_PHONES: ${{ secrets.OPS_ADMIN_PHONES }}
-        run: npm run build && npx wrangler deploy --keep-vars
+        run: npm run build && npx wrangler deploy --env preview --keep-vars
