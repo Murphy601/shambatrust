@@ -7,7 +7,9 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.resolve(__dirname),
   },
-  serverExternalPackages: ["pdfkit", "pdf-lib"],
+  // pdfkit reads its AFM data and our embedded binder font from disk at runtime,
+  // so these must stay outside the bundle.
+  serverExternalPackages: ["pdfkit", "pdf-lib", "dejavu-fonts-ttf"],
   images: {
     remotePatterns: [
       {
