@@ -1,6 +1,4 @@
 import { NextResponse } from "next/server";
-import { promises as fs } from "fs";
-import path from "path";
 import { randomUUID } from "crypto";
 import { requireVaultAccess } from "@/lib/vault-access";
 import { vaultContentLocked } from "@/lib/vault-lock";
@@ -9,7 +7,7 @@ import {
   createAudioTestament,
   getAsset,
   listAudioTestaments,
-  testamentUploadsDir,
+  writeStoredFile,
 } from "@/lib/db/store";
 import {
   MAX_TESTAMENT_BYTES,
@@ -90,10 +88,8 @@ export async function POST(request: Request) {
   }
 
   const bytes = Buffer.from(await file.arrayBuffer());
-  const filename = `testament-${access.vault.id}-${randomUUID()}${audioExtension(mimeType)}`;
-  const dir = testamentUploadsDir();
-  await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(path.join(dir, filename), bytes);
+  const filename = `testaments/testament-${access.vault.id}-${randomUUID()}${audioExtension(mimeType)}`;
+  const documentPath = await writeStoredFile(filename, bytes, mimeType);
 
   const testament = await createAudioTestament({
     vaultId: access.vault.id,
@@ -103,7 +99,7 @@ export async function POST(request: Request) {
     title,
     language,
     documentName: file.name || `${title || "Voice testament"}${audioExtension(mimeType)}`,
-    documentPath: filename,
+    documentPath,
     mimeType,
     fileSize: bytes.byteLength,
     durationSeconds,

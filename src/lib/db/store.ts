@@ -55,6 +55,21 @@ import type {
   SuccessionApprovalRole,
   TranscriptStatus,
 } from "@/lib/db/types";
+import { getWorkerEnv } from "@/lib/cf-env";
+import { blobKey, deleteStoredFile, uploadsDir } from "@/lib/db/blobs";
+
+export {
+  advocateUploadsDir,
+  bindersDir,
+  blobKey,
+  deleteStoredFile,
+  elderSignupUploadsDir,
+  isUnsafeBlobKey,
+  readStoredFile,
+  testamentUploadsDir,
+  uploadsDir,
+  writeStoredFile,
+} from "@/lib/db/blobs";
 
 const DATA_DIR = path.join(process.cwd(), ".data");
 const DB_PATH = path.join(DATA_DIR, "db.json");
@@ -163,19 +178,7 @@ function normalizeReview(r: ReviewRequest): ReviewRequest {
   };
 }
 
-async function ensureDb(): Promise<void> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  try {
-    await fs.access(DB_PATH);
-  } catch {
-    await fs.writeFile(DB_PATH, JSON.stringify(emptyDb(), null, 2), "utf8");
-  }
-}
-
-export async function readDb(): Promise<Database> {
-  await ensureDb();
-  const raw = await fs.readFile(DB_PATH, "utf8");
-  const parsed = JSON.parse(raw) as Partial<Database>;
+function normalizeDb(parsed: Partial<Database>): Database {
   const db = { ...emptyDb(), ...parsed } as Database;
   db.users = (db.users || []).map((u) => ({
     ...u,
@@ -245,7 +248,42 @@ export async function readDb(): Promise<Database> {
   return db;
 }
 
+async function ensureDb(): Promise<void> {
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  try {
+    await fs.access(DB_PATH);
+  } catch {
+    await fs.writeFile(DB_PATH, JSON.stringify(emptyDb(), null, 2), "utf8");
+  }
+}
+
+export async function readDb(): Promise<Database> {
+  const env = await getWorkerEnv();
+  if (env.DB) {
+    const row = await env.DB.prepare(
+      "SELECT payload FROM app_state WHERE id = 1",
+    ).first<{ payload: string }>();
+    if (!row?.payload) {
+      return normalizeDb(emptyDb());
+    }
+    return normalizeDb(JSON.parse(row.payload) as Partial<Database>);
+  }
+  await ensureDb();
+  const raw = await fs.readFile(DB_PATH, "utf8");
+  return normalizeDb(JSON.parse(raw) as Partial<Database>);
+}
+
 export async function writeDb(db: Database): Promise<void> {
+  const env = await getWorkerEnv();
+  if (env.DB) {
+    await env.DB.prepare(
+      `INSERT INTO app_state (id, payload, updated_at) VALUES (1, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at`,
+    )
+      .bind(JSON.stringify(db), new Date().toISOString())
+      .run();
+    return;
+  }
   await ensureDb();
   await fs.writeFile(DB_PATH, JSON.stringify(db, null, 2), "utf8");
 }
@@ -2290,30 +2328,10 @@ export async function listActiveAdvocates(): Promise<User[]> {
   return db.users.filter((u) => u.role === "advocate" && !u.advocateSuspended);
 }
 
-export function uploadsDir(): string {
-  return path.join(DATA_DIR, "uploads");
-}
-
-export function testamentUploadsDir(): string {
-  return path.join(DATA_DIR, "uploads", "testaments");
-}
-
-export function advocateUploadsDir(): string {
-  return path.join(DATA_DIR, "uploads", "advocate-apps");
-}
-
-export function elderSignupUploadsDir(): string {
-  return path.join(DATA_DIR, "uploads", "elder-signup");
-}
-
-export function bindersDir(): string {
-  return path.join(DATA_DIR, "uploads", "binders");
-}
-
 /** Resolve a stored path (absolute or relative under uploads/). */
 export function resolveStoredFilePath(stored: string): string {
   if (path.isAbsolute(stored)) return stored;
-  return path.join(uploadsDir(), stored);
+  return path.join(uploadsDir(), blobKey(stored));
 }
 
 export async function listVaultBinders(vaultId: string): Promise<VaultBinder[]> {
@@ -2588,7 +2606,7 @@ export async function purgeExpiredUploadPaths(
     for (const doc of docs) {
       if (doc.documentPath) {
         try {
-          await fs.unlink(doc.documentPath);
+          await deleteStoredFile(doc.documentPath);
           paths.push(doc.documentPath);
           doc.documentPath = null;
         } catch {

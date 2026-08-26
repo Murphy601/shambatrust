@@ -12,6 +12,8 @@ import { SiteHeader } from "@/components/site-header";
 import { SuccessStories } from "@/components/success-stories";
 import { TrustSignals } from "@/components/trust-signals";
 
+export const dynamic = "force-dynamic";
+
 export default function Home() {
   return (
     <>

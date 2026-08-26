@@ -184,7 +184,11 @@ The live Worker URL is `https://shambatrust.<your-subdomain>.workers.dev` until 
 
 The OpenNext bundle is about **2.4 MiB gzipped**, so this needs **Workers Paid** (10 MiB script limit). The free / temporary 1 MiB cap cannot host this app.
 
-Local `.data/` JSON and uploads are **ephemeral** on Workers. The vault still runs for confirmation; lasting storage is Supabase / R2 later.
+Production storage is the existing Cloudflare **D1** database `shambatrust` (`app_state` JSON) and the **R2** bucket `shambatrust-uploads`. `wrangler.jsonc` binds both. Local `next dev` still falls back to `.data/db.json` and `.data/uploads/` when those bindings are not in the request.
+
+Do not Retry an old Workers Builds job — that rebuilds the old commit. Start a **new** deploy of current `main`.
+
+When you buy a domain, attach it only to Worker `shambatrust`.
 
 ### Succession demo path
 

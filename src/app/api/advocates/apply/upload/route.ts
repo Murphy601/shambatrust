@@ -1,7 +1,5 @@
-import { promises as fs } from "fs";
-import path from "path";
 import { NextResponse } from "next/server";
-import { advocateUploadsDir, newId } from "@/lib/db/store";
+import { newId, writeStoredFile } from "@/lib/db/store";
 
 const MAX_BYTES = 8 * 1024 * 1024;
 const ALLOWED = new Set([
@@ -30,12 +28,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const dir = advocateUploadsDir();
-    await fs.mkdir(dir, { recursive: true });
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
-    const documentPath = path.join(dir, `${slot}-${newId()}-${safeName}`);
     const buffer = Buffer.from(await file.arrayBuffer());
-    await fs.writeFile(documentPath, buffer);
+    const documentPath = await writeStoredFile(
+      `advocate-apps/${slot}-${newId()}-${safeName}`,
+      buffer,
+      file.type || undefined,
+    );
 
     return NextResponse.json({
       documentName: file.name,

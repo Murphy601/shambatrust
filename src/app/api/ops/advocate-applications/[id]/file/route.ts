@@ -1,8 +1,7 @@
-import { promises as fs } from "fs";
-import path from "path";
 import { NextResponse } from "next/server";
+import path from "path";
 import { requireAdminAccess } from "@/lib/secure-docs/access";
-import { getAdvocateApplication } from "@/lib/db/store";
+import { getAdvocateApplication, readStoredFile } from "@/lib/db/store";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -31,9 +30,15 @@ export async function GET(request: Request, { params }: Params) {
 
   const [pathKey, nameKey] = SLOTS[slot];
   const filePath = app[pathKey];
-  const fileName = app[nameKey];
+  const fileName = app[nameKey] || "document";
+  if (!filePath) {
+    return NextResponse.json({ error: "File missing on disk." }, { status: 404 });
+  }
+  const data = await readStoredFile(filePath);
+  if (!data) {
+    return NextResponse.json({ error: "File missing on disk." }, { status: 404 });
+  }
   try {
-    const data = await fs.readFile(filePath);
     const ext = path.extname(fileName).toLowerCase();
     const type =
       ext === ".pdf"
@@ -43,7 +48,7 @@ export async function GET(request: Request, { params }: Params) {
           : ext === ".webp"
             ? "image/webp"
             : "image/jpeg";
-    return new NextResponse(data, {
+    return new NextResponse(new Uint8Array(data), {
       headers: {
         "Content-Type": type,
         "Content-Disposition": `inline; filename="${fileName.replace(/"/g, "")}"`,

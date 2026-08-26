@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { promises as fs } from "fs";
 import path from "path";
 import { readSession } from "@/lib/auth/session";
-import { addAudit, uploadsDir } from "@/lib/db/store";
+import { addAudit, isUnsafeBlobKey, readStoredFile } from "@/lib/db/store";
 import { resolveSecureDocAccess } from "@/lib/secure-docs/access";
 import { validateViewToken } from "@/lib/secure-docs/tokens";
 
@@ -78,18 +77,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: resolved.error }, { status: resolved.status });
   }
 
-  if (
-    resolved.filename.includes("..") ||
-    resolved.filename.includes("/") ||
-    resolved.filename.includes("\\")
-  ) {
+  if (isUnsafeBlobKey(resolved.filename)) {
     return NextResponse.json({ error: "Invalid file." }, { status: 400 });
   }
 
-  const filePath = path.join(uploadsDir(), resolved.filename);
-
   try {
-    const bytes = await fs.readFile(filePath);
+    const bytes = await readStoredFile(resolved.filename);
+    if (!bytes) {
+      return NextResponse.json({ error: "File missing on server." }, { status: 404 });
+    }
     const ext = path.extname(resolved.filename).toLowerCase();
     const type =
       ext === ".pdf"
@@ -109,7 +105,7 @@ export async function GET(request: Request) {
       detail: `${kind}:${resolved.displayName}`,
     });
 
-    return new NextResponse(bytes, {
+    return new NextResponse(new Uint8Array(bytes), {
       status: 200,
       headers: {
         "Content-Type": type,

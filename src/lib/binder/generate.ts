@@ -1,5 +1,4 @@
 import { createHash } from "crypto";
-import { promises as fs } from "fs";
 import path from "path";
 import PDFDocument from "pdfkit";
 import { PDFDocument as PdfLibDocument } from "pdf-lib";
@@ -17,7 +16,6 @@ import type {
 } from "@/lib/db/types";
 import {
   addAudit,
-  bindersDir,
   createVaultBinderGenerating,
   failVaultBinder,
   finalizeVaultBinder,
@@ -31,10 +29,11 @@ import {
   listBeneficiaries,
   listLegalDocumentsForReview,
   listTitleLookups,
+  readStoredFile,
   resetVaultBinderGenerating,
-  resolveStoredFilePath,
   getVaultById,
   getVaultBinder,
+  writeStoredFile,
 } from "@/lib/db/store";
 import { spokenLanguageLabel } from "@/lib/languages";
 import { registerBinderFonts } from "@/lib/binder/fonts";
@@ -59,7 +58,8 @@ type Snapshot = {
 
 type Attachment = {
   label: string;
-  absolutePath: string;
+  bytes: Buffer;
+  filename: string;
   kind: "image" | "pdf" | "other";
 };
 
@@ -70,23 +70,19 @@ function detectKind(filePath: string): Attachment["kind"] {
   return "other";
 }
 
-async function fileExists(filePath: string): Promise<boolean> {
-  try {
-    await fs.access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 async function collectAttachments(snapshot: Snapshot): Promise<Attachment[]> {
   const out: Attachment[] = [];
 
   const push = async (label: string, stored: string | null | undefined) => {
     if (!stored) return;
-    const absolutePath = resolveStoredFilePath(stored);
-    if (!(await fileExists(absolutePath))) return;
-    out.push({ label, absolutePath, kind: detectKind(absolutePath) });
+    const bytes = await readStoredFile(stored);
+    if (!bytes) return;
+    out.push({
+      label,
+      bytes,
+      filename: stored,
+      kind: detectKind(stored),
+    });
   };
 
   await push("National ID — front", snapshot.owner.idFrontPath);
@@ -443,7 +439,7 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
           const maxWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
           const maxHeight = 360;
           if (doc.y > doc.page.height - 200) doc.addPage();
-          doc.image(att.absolutePath, {
+          doc.image(att.bytes, {
             fit: [maxWidth, maxHeight],
             align: "center",
           });
@@ -465,7 +461,7 @@ async function mergePdfAttachments(
   const merged = await PdfLibDocument.load(narrative);
   for (const att of pdfAttachments) {
     try {
-      const bytes = await fs.readFile(att.absolutePath);
+      const bytes = att.bytes;
       const src = await PdfLibDocument.load(bytes, { ignoreEncryption: true });
       const pages = await merged.copyPages(src, src.getPageIndices());
       // Cover page note before appended pages
@@ -562,11 +558,9 @@ async function writeBinderPdf(snapshot: Snapshot): Promise<{
           };
         })();
 
-  const dir = bindersDir();
-  await fs.mkdir(dir, { recursive: true });
   const documentName = `ShambaTrust-Binder-${snapshot.owner.fullName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 40)}-v${snapshot.version}.pdf`;
-  const relativePath = `${snapshot.vault.id}-v${snapshot.version}-${Date.now()}.pdf`;
-  await fs.writeFile(path.join(dir, relativePath), final.buffer);
+  const relativePath = `binders/${snapshot.vault.id}-v${snapshot.version}-${Date.now()}.pdf`;
+  await writeStoredFile(relativePath, final.buffer, "application/pdf");
 
   const fileHash = createHash("sha256").update(final.buffer).digest("hex");
   return {
@@ -670,5 +664,8 @@ export async function regenerateFailedVaultBinder(
 }
 
 export function binderAbsolutePath(relativePath: string): string {
-  return path.join(bindersDir(), relativePath);
+  const key = relativePath.startsWith("binders/")
+    ? relativePath
+    : `binders/${relativePath}`;
+  return key;
 }
