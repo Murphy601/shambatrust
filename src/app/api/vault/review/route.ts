@@ -23,6 +23,10 @@ const schema = z.object({
   consultMode: z.enum(["whatsapp", "video", "in_person"]),
   notes: z.string().optional().default(""),
   consentAccepted: z.literal(true),
+  instruments: z
+    .array(z.enum(["will", "land_trust", "poa"]))
+    .optional()
+    .default(["will"]),
 });
 
 export async function GET() {
@@ -112,11 +116,26 @@ export async function POST(request: Request) {
   const withinFree = isWithinFreeAmendmentWindow(lastSubmitAt);
   const alreadyChargedOpen = access.vault.amendmentFeeCharged;
 
+  const instrumentLabels: Record<string, string> = {
+    will: "Last Will & Testament",
+    land_trust: "Family Land Trust",
+    poa: "Power of Attorney",
+  };
+  const instrumentLine = parsed.data.instruments
+    .map((item) => instrumentLabels[item] || item)
+    .join(", ");
+  const notes = [
+    `Requested instruments: ${instrumentLine || "Last Will & Testament"}`,
+    parsed.data.notes.trim(),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
   const review = await createReviewRequest({
     vaultId: access.vault.id,
     packageTier: parsed.data.packageTier,
     consultMode: parsed.data.consultMode,
-    notes: parsed.data.notes,
+    notes,
     consentAccepted: true,
   });
 

@@ -21,6 +21,7 @@ export function OpsShell({
   const links = [
     ["/ops", "Overview"],
     ["/ops/elders", "Elders"],
+    ["/ops/documents", "Documents"],
     ["/ops/billing", "Billing"],
     ["/ops/title-lookups", "Titles"],
     ["/ops/advocates", "Applications"],

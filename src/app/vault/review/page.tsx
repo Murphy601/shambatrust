@@ -27,6 +27,9 @@ export default function ReviewPage() {
   const [consultMode, setConsultMode] = useState<"whatsapp" | "video" | "in_person">(
     "whatsapp",
   );
+  const [instruments, setInstruments] = useState<Array<"will" | "land_trust" | "poa">>([
+    "will",
+  ]);
   const [notes, setNotes] = useState("");
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [reviews, setReviews] = useState<ReviewRequest[]>([]);
@@ -128,6 +131,7 @@ export default function ReviewPage() {
       body: JSON.stringify({
         packageTier,
         consultMode,
+        instruments,
         notes,
         consentAccepted: true,
       }),
@@ -268,6 +272,42 @@ export default function ReviewPage() {
               <option value="premium">Trust & Business Estate</option>
             </select>
           </div>
+          <fieldset className="space-y-2">
+            <legend className="field-label">
+              {sw ? "Nyaraka za kuandaa" : "Instruments to prepare"}
+            </legend>
+            <p className="text-sm text-muted">
+              {sw
+                ? "Wosia hulinda M-Pesa na SACCO. Amana hulinda mashamba yasigawanywe."
+                : "A will covers M-Pesa and SACCOs. A family land trust keeps shambas unified."}
+            </p>
+            {(
+              [
+                ["will", sw ? "Wosia (Last Will)" : "Last Will & Testament"],
+                [
+                  "land_trust",
+                  sw ? "Amana ya ardhi ya familia" : "Family Land Trust / Living Trust",
+                ],
+                ["poa", sw ? "Uwakilishi wa nguvu" : "Power of Attorney"],
+              ] as const
+            ).map(([id, label]) => (
+              <label key={id} className="flex items-center gap-3 text-base">
+                <input
+                  type="checkbox"
+                  className="h-5 w-5"
+                  checked={instruments.includes(id)}
+                  onChange={(e) => {
+                    setInstruments((current) => {
+                      if (e.target.checked) return [...current, id];
+                      const next = current.filter((item) => item !== id);
+                      return next.length ? next : current;
+                    });
+                  }}
+                />
+                {label}
+              </label>
+            ))}
+          </fieldset>
           <div>
             <label className="field-label" htmlFor="consult">
               {sw ? "Njia ya ushauri" : "Consultation mode"}

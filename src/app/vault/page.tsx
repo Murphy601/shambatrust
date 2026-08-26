@@ -200,7 +200,8 @@ export default async function VaultDashboardPage() {
         </h2>
         {certified.length === 0 ? (
           <p className="mt-3 text-lg text-muted">
-            No sealed documents yet. They appear after advocate sign-off.
+            No sealed documents yet. Ask your advocate for a will, family land
+            trust, or power of attorney — they appear here after sign-off.
           </p>
         ) : (
           <ul className="mt-4 space-y-3">
@@ -211,7 +212,13 @@ export default async function VaultDashboardPage() {
               >
                 <span className="font-semibold">{doc.title}</span>
                 {" — "}
-                <span className="capitalize">{doc.type.replace("_", " ")}</span>
+                <span className="capitalize">
+                  {doc.type === "land_trust"
+                    ? "Family land trust"
+                    : doc.type === "poa"
+                      ? "Power of attorney"
+                      : "Last will & testament"}
+                </span>
                 {" · "}
                 <span className="capitalize text-forest">
                   {doc.status.replace("_", " ")}
