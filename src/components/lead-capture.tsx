@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { LandingPhoto } from "@/components/landing-photo";
 import { useLocale } from "@/components/locale-provider";
 import { buildWhatsAppUrl } from "@/lib/whatsapp";
 
@@ -37,21 +38,36 @@ export function LeadCapture() {
       className="border-t border-border bg-bg-deep/80 py-16 sm:py-20"
       aria-labelledby="contact-title"
     >
-      <div className="section grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
-        <div>
+      <div className="section">
+      <div className="relative mb-10 overflow-hidden rounded-[0.45rem]">
+        <LandingPhoto
+          src="/landing/cta-family.png"
+          alt={
+            locale === "sw"
+              ? "Familia ya Kenya imeketi kwenye veranda ya nyumba wakati wa jioni"
+              : "Kenyan family gathered at dusk on a homestead veranda"
+          }
+          className="min-h-[16rem] lg:min-h-[20rem]"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0B1D3A]/85 via-[#0B1D3A]/40 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 p-6 sm:p-10">
           <h2
             id="contact-title"
-            className="text-3xl font-semibold text-forest-deep sm:text-4xl"
+            className="text-3xl font-semibold text-white sm:text-4xl"
           >
             {t.lead.title}
           </h2>
-          <p className="mt-3 max-w-xl text-lg text-muted">{t.lead.subtitle}</p>
+          <p className="mt-3 max-w-2xl text-lg text-white/85">{t.lead.subtitle}</p>
+        </div>
+      </div>
 
+      <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
+        <div>
           <a
             href={buildWhatsAppUrl(quickWhatsApp)}
             target="_blank"
             rel="noopener noreferrer"
-            className="btn btn-whatsapp mt-8"
+            className="btn btn-whatsapp"
           >
             {t.lead.whatsapp}
           </a>
@@ -134,6 +150,7 @@ export function LeadCapture() {
             </p>
           )}
         </form>
+      </div>
       </div>
     </section>
   );

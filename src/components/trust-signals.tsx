@@ -1,5 +1,6 @@
 "use client";
 
+import { LandingPhoto } from "@/components/landing-photo";
 import { useLocale } from "@/components/locale-provider";
 
 export function TrustSignals() {
@@ -19,7 +20,17 @@ export function TrustSignals() {
           {t.trust.title}
         </h2>
 
-        <ul className="mt-8 grid gap-4 sm:grid-cols-3">
+        <div className="mt-8 grid items-stretch gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <LandingPhoto
+            src="/landing/advocates.png"
+            alt={
+              locale === "sw"
+                ? "Mawakili wa Kenya wakiangalia faili la mirathi lililofungwa muhuri ofisini"
+                : "Kenyan advocates reviewing a stamped succession file in a panelled office"
+            }
+            className="min-h-[16rem]"
+          />
+        <ul className="grid gap-4">
           {t.trust.badges.map((badge) => (
             <li
               key={badge}
@@ -29,6 +40,7 @@ export function TrustSignals() {
             </li>
           ))}
         </ul>
+        </div>
 
         <div className="mt-10 grid gap-4 sm:grid-cols-3">
           <div className="rounded border border-[rgba(233,240,234,0.28)] px-4 py-5">

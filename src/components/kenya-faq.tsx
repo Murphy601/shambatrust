@@ -1,5 +1,6 @@
 "use client";
 
+import { LandingPhoto } from "@/components/landing-photo";
 import { useLocale } from "@/components/locale-provider";
 
 const ITEMS = {
@@ -63,7 +64,17 @@ export function KenyaFaq() {
             ? "Majibu mafupi kuhusu wosia, ArdhiSasa, M-Pesa, na mahakama za Kenya."
             : "Short answers on wills, ArdhiSasa, M-Pesa, and Kenyan courts."}
         </p>
-        <div className="mt-8 space-y-4">
+        <div className="mt-8 grid items-start gap-8 lg:grid-cols-[0.95fr_1.05fr]">
+          <LandingPhoto
+            src="/landing/title-verify.png"
+            alt={
+              locale === "sw"
+                ? "Kurasa za hati miliki ya Kenya zilizo na muhuri wa kijani wa uthibitisho"
+                : "Kenyan land-title pages with a green verified stamp and official seals"
+            }
+            className="min-h-[18rem] lg:min-h-[26rem]"
+          />
+        <div className="space-y-4">
           {items.map((item) => (
             <details
               key={item.q}
@@ -83,6 +94,7 @@ export function KenyaFaq() {
               <p className="mt-3 text-lg leading-relaxed text-ink">{item.a}</p>
             </details>
           ))}
+        </div>
         </div>
       </div>
     </section>
