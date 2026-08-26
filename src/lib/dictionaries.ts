@@ -5,12 +5,18 @@ export const dictionaries = {
     brand: "ShambaTrust",
     tagline: "Ancestral Asset Digitization & Estate Succession Vault",
     nav: {
-      how: "How it works",
+      how: "How It Works",
       stories: "Success stories",
       audit: "Family Peace Audit",
       pricing: "Pricing",
       trust: "Why trust us",
       contact: "Contact",
+      solutions: "Solutions",
+      advocates: "For Advocates",
+      help: "Help Center",
+      signIn: "Sign in",
+      getStarted: "Secure My Legacy",
+      succession: "Succession",
     },
     langToggle: "Kiswahili",
     carousel: {
@@ -242,7 +248,7 @@ export const dictionaries = {
       note: "Amendments: free within 48 hours of submit, then a smaller amendment fee (not a full new package). Each ArdhiSasa / title lookup is billed per search (~KES 1,500).",
     },
     lead: {
-      title: "Start protecting your legacy",
+      title: "Start securing your family shamba today",
       subtitle:
         "Message us on WhatsApp or leave your details. A ShambaTrust guide will respond in English or Kiswahili.",
       name: "Full name",
@@ -292,6 +298,12 @@ export const dictionaries = {
       pricing: "Bei",
       trust: "Kwa nini tutumaini",
       contact: "Wasiliana",
+      solutions: "Suluhisho",
+      advocates: "Kwa Mawakili",
+      help: "Kituo cha Msaada",
+      signIn: "Ingia",
+      getStarted: "Linda Urithi",
+      succession: "Mirathi",
     },
     langToggle: "English",
     carousel: {

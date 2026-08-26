@@ -8,7 +8,7 @@ export function TrustSignals() {
   return (
     <section
       id="trust"
-      className="border-y border-border bg-forest-deep py-16 text-[#eef5ef] sm:py-20"
+      className="border-y border-border bg-[#0B1D3A] py-16 text-white sm:py-20"
       aria-labelledby="trust-title"
     >
       <div className="section">
