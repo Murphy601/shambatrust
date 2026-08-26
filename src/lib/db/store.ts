@@ -38,6 +38,12 @@ import type {
   VaultBinder,
   VaultSetupStep,
   VaultStatus,
+  WillDraft,
+  TrustDraft,
+  BurialWishes,
+  DsarRequest,
+  DsarStatus,
+  OutboundNotice,
 } from "@/lib/db/types";
 import { normalizeLskNumber } from "@/lib/advocate/lsk";
 import { amountForBillingEvent } from "@/lib/ops/billing";
@@ -100,6 +106,8 @@ const emptyDb = (): Database => ({
   vaultBinders: [],
   otps: [],
   auditLog: [],
+  dsarRequests: [],
+  outboundNotices: [],
 });
 
 /**
@@ -117,6 +125,9 @@ function normalizeAsset(a: Asset): Asset {
     saccoMemberNumber: a.saccoMemberNumber ?? "",
     saccoNominees: Array.isArray(a.saccoNominees) ? a.saccoNominees : [],
     mpesaNumber: a.mpesaNumber ?? "",
+    disputeFlag: Boolean(a.disputeFlag),
+    disputeNotes: a.disputeNotes ?? "",
+    familyAlert: Boolean(a.familyAlert),
   };
 }
 
@@ -215,6 +226,9 @@ function normalizeDb(parsed: Partial<Database>): Database {
     amendmentFeeCharged: Boolean(v.amendmentFeeCharged),
     forceLocked: Boolean(v.forceLocked),
     opsNotes: v.opsNotes ?? "",
+    willDraft: v.willDraft ?? null,
+    trustDraft: v.trustDraft ?? null,
+    burialWishes: v.burialWishes ?? null,
   }));
   db.titleLookups = (db.titleLookups || []).map((t) => ({
     ...t,
@@ -245,6 +259,8 @@ function normalizeDb(parsed: Partial<Database>): Database {
   db.marketingLeads = db.marketingLeads || [];
   db.publicStatusTokens = db.publicStatusTokens || [];
   db.vaultBinders = db.vaultBinders || [];
+  db.dsarRequests = db.dsarRequests || [];
+  db.outboundNotices = db.outboundNotices || [];
   return db;
 }
 
@@ -276,6 +292,26 @@ export async function readDb(): Promise<Database> {
 export async function writeDb(db: Database): Promise<void> {
   const env = await getWorkerEnv();
   if (env.DB) {
+    const row = await env.DB.prepare(
+      "SELECT payload FROM app_state WHERE id = 1",
+    ).first<{ payload: string }>();
+    if (row?.payload) {
+      try {
+        const existing = JSON.parse(row.payload) as Partial<Database>;
+        if ((existing.users?.length || 0) > 0 && (db.users?.length || 0) === 0) {
+          throw new Error(
+            "Refusing to overwrite the live vault with an empty user list.",
+          );
+        }
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message.includes("Refusing to overwrite")
+        ) {
+          throw error;
+        }
+      }
+    }
     await env.DB.prepare(
       `INSERT INTO app_state (id, payload, updated_at) VALUES (1, ?, ?)
        ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at`,
@@ -432,6 +468,9 @@ export async function createUser(input: {
       amendmentFeeCharged: false,
       forceLocked: false,
       opsNotes: "",
+      willDraft: null,
+      trustDraft: null,
+      burialWishes: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -542,6 +581,9 @@ export async function saveAsset(
     saccoMemberNumber: asset.saccoMemberNumber || "",
     saccoNominees,
     mpesaNumber: asset.mpesaNumber || "",
+    disputeFlag: Boolean(asset.disputeFlag),
+    disputeNotes: asset.disputeNotes || "",
+    familyAlert: Boolean(asset.familyAlert),
     createdAt: now,
     updatedAt: now,
   };
@@ -2751,4 +2793,145 @@ export async function getPublicStatusToken(
 ): Promise<PublicStatusToken | undefined> {
   const db = await readDb();
   return db.publicStatusTokens.find((t) => t.token === token);
+}
+
+export async function saveWillDraft(
+  vaultId: string,
+  draft: Omit<WillDraft, "updatedAt">,
+): Promise<WillDraft> {
+  const db = await readDb();
+  const vault = db.vaults.find((v) => v.id === vaultId);
+  if (!vault) throw new Error("Vault not found");
+  const saved: WillDraft = { ...draft, updatedAt: new Date().toISOString() };
+  vault.willDraft = saved;
+  vault.updatedAt = saved.updatedAt;
+  await writeDb(db);
+  return saved;
+}
+
+export async function saveTrustDraft(
+  vaultId: string,
+  draft: Omit<TrustDraft, "updatedAt">,
+): Promise<TrustDraft> {
+  const db = await readDb();
+  const vault = db.vaults.find((v) => v.id === vaultId);
+  if (!vault) throw new Error("Vault not found");
+  const saved: TrustDraft = { ...draft, updatedAt: new Date().toISOString() };
+  vault.trustDraft = saved;
+  vault.updatedAt = saved.updatedAt;
+  await writeDb(db);
+  return saved;
+}
+
+export async function saveBurialWishes(
+  vaultId: string,
+  wishes: Omit<BurialWishes, "updatedAt">,
+): Promise<BurialWishes> {
+  const db = await readDb();
+  const vault = db.vaults.find((v) => v.id === vaultId);
+  if (!vault) throw new Error("Vault not found");
+  const saved: BurialWishes = { ...wishes, updatedAt: new Date().toISOString() };
+  vault.burialWishes = saved;
+  vault.updatedAt = saved.updatedAt;
+  await writeDb(db);
+  return saved;
+}
+
+export async function queueOutboundNotice(input: {
+  vaultId: string | null;
+  channel: "whatsapp" | "sms";
+  toPhone: string;
+  body: string;
+  relatedAction: string;
+  status?: OutboundNotice["status"];
+  error?: string | null;
+}): Promise<OutboundNotice> {
+  const db = await readDb();
+  const notice: OutboundNotice = {
+    id: newId(),
+    vaultId: input.vaultId,
+    channel: input.channel,
+    toPhone: input.toPhone,
+    body: input.body,
+    status: input.status || "queued",
+    relatedAction: input.relatedAction,
+    createdAt: new Date().toISOString(),
+    sentAt: input.status === "sent" ? new Date().toISOString() : null,
+    error: input.error || null,
+  };
+  db.outboundNotices.push(notice);
+  await writeDb(db);
+  return notice;
+}
+
+export async function listOutboundNotices(): Promise<OutboundNotice[]> {
+  const db = await readDb();
+  return [...db.outboundNotices].sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt),
+  );
+}
+
+export async function listDisputedAssets(): Promise<
+  Array<{ asset: Asset; vaultId: string; ownerName: string; phone: string }>
+> {
+  const db = await readDb();
+  const rows = [];
+  for (const asset of db.assets) {
+    if (!asset.disputeFlag && !asset.familyAlert) continue;
+    const vault = db.vaults.find((v) => v.id === asset.vaultId);
+    const owner = vault
+      ? db.users.find((u) => u.id === vault.ownerId)
+      : undefined;
+    rows.push({
+      asset,
+      vaultId: asset.vaultId,
+      ownerName: owner?.fullName || "Unknown",
+      phone: owner?.phone || "",
+    });
+  }
+  return rows;
+}
+
+export async function listDsarRequests(): Promise<DsarRequest[]> {
+  const db = await readDb();
+  return [...db.dsarRequests].sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt),
+  );
+}
+
+export async function createDsarRequest(
+  input: Omit<DsarRequest, "id" | "createdAt" | "fulfilledAt">,
+): Promise<DsarRequest> {
+  const db = await readDb();
+  const row: DsarRequest = {
+    id: newId(),
+    ...input,
+    createdAt: new Date().toISOString(),
+    fulfilledAt: input.status === "fulfilled" ? new Date().toISOString() : null,
+  };
+  db.dsarRequests.push(row);
+  await writeDb(db);
+  return row;
+}
+
+export async function updateDsarRequest(input: {
+  id: string;
+  status: DsarStatus;
+  notes?: string;
+}): Promise<DsarRequest | undefined> {
+  const db = await readDb();
+  const row = db.dsarRequests.find((d) => d.id === input.id);
+  if (!row) return undefined;
+  row.status = input.status;
+  if (typeof input.notes === "string") row.notes = input.notes;
+  if (input.status === "fulfilled") row.fulfilledAt = new Date().toISOString();
+  await writeDb(db);
+  return row;
+}
+
+export async function listMarketingLeads(): Promise<MarketingLead[]> {
+  const db = await readDb();
+  return [...db.marketingLeads].sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt),
+  );
 }

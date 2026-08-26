@@ -280,6 +280,27 @@ export default async function VaultDashboardPage() {
           value="Let a son or daughter help"
         />
         <PhotoCard
+          href="/vault/will"
+          src="/landing/family-trust.png"
+          alt="Family planning a written will together"
+          label="Will builder"
+          value="5 guided steps · advocate seals it"
+        />
+        <PhotoCard
+          href="/vault/trust"
+          src="/landing/title-verify.png"
+          alt="Land title held under a family trust"
+          label="Family land trust"
+          value="Keep shambas unified"
+        />
+        <PhotoCard
+          href="/vault/wishes"
+          src="/landing/cta-family.png"
+          alt="Family looking across ancestral land"
+          label="Burial wishes"
+          value="Optional funeral instructions"
+        />
+        <PhotoCard
           href="/vault/succession"
           src="/landing/cta-family.png"
           alt="Family looking out across their land"

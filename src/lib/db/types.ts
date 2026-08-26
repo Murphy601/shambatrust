@@ -94,6 +94,9 @@ export type Vault = {
   /** Ops force-lock — blocks elder edits even in draft */
   forceLocked: boolean;
   opsNotes: string;
+  willDraft: WillDraft | null;
+  trustDraft: TrustDraft | null;
+  burialWishes: BurialWishes | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -111,6 +114,67 @@ export type SaccoNominee = {
   relationship: string;
   /** Share of this SACCO account, 0–100 */
   percentage: number;
+};
+
+export type WillDraft = {
+  testatorName: string;
+  testatorId: string;
+  primaryResidence: string;
+  executorName: string;
+  executorPhone: string;
+  altExecutorName: string;
+  altExecutorPhone: string;
+  guardianName: string;
+  guardianPhone: string;
+  altGuardianName: string;
+  witnessAcknowledged: boolean;
+  notes: string;
+  updatedAt: string;
+};
+
+export type TrustDraft = {
+  trustName: string;
+  primaryTrustee: string;
+  coTrustee: string;
+  titleNumbers: string;
+  conditions: string;
+  updatedAt: string;
+};
+
+export type BurialWishes = {
+  burialLocation: "ancestral" | "cemetery" | "undecided";
+  burialDetails: string;
+  committeeLead1: string;
+  committeeLead2: string;
+  specialMessage: string;
+  updatedAt: string;
+};
+
+export type DsarStatus = "received" | "in_progress" | "fulfilled" | "refused";
+
+export type DsarRequest = {
+  id: string;
+  elderUserId: string | null;
+  requesterName: string;
+  requesterPhone: string;
+  requestType: "access" | "correction" | "deletion" | "restriction";
+  status: DsarStatus;
+  notes: string;
+  createdAt: string;
+  fulfilledAt: string | null;
+};
+
+export type OutboundNotice = {
+  id: string;
+  vaultId: string | null;
+  channel: "whatsapp" | "sms";
+  toPhone: string;
+  body: string;
+  status: "queued" | "sent" | "failed";
+  relatedAction: string;
+  createdAt: string;
+  sentAt: string | null;
+  error: string | null;
 };
 
 export type Asset = {
@@ -149,6 +213,9 @@ export type Asset = {
   saccoMemberNumber: string;
   saccoNominees: SaccoNominee[];
   mpesaNumber: string;
+  disputeFlag: boolean;
+  disputeNotes: string;
+  familyAlert: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -586,4 +653,6 @@ export type Database = {
   vaultBinders: VaultBinder[];
   otps: OtpRecord[];
   auditLog: AuditEntry[];
+  dsarRequests: DsarRequest[];
+  outboundNotices: OutboundNotice[];
 };

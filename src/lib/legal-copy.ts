@@ -220,9 +220,9 @@ const privacy: Record<Locale, LegalDoc> = {
         ],
       },
       {
-        heading: "9. Contact",
+        heading: "9. Contact / Data Protection Officer",
         body: [
-          "Data questions: +254 748 879 579 · Offices: Nairobi, Nakuru, Eldoret.",
+          "Data questions and Data Subject Access Requests: +254 748 879 579 or WhatsApp. Our Data Protection Officer desk logs access, correction, deletion, and restriction requests in Admin Ops under Kenya’s Data Protection Act, 2019. Offices: Nairobi, Nakuru, Eldoret.",
         ],
       },
     ],
@@ -292,9 +292,9 @@ const privacy: Record<Locale, LegalDoc> = {
         ],
       },
       {
-        heading: "9. Mawasiliano",
+        heading: "9. Mawasiliano / Afisa wa Ulinzi wa Data",
         body: [
-          "Maswali ya data: +254 748 879 579 · Ofisi: Nairobi, Nakuru, Eldoret.",
+          "Maswali ya data na maombi ya DSAR: +254 748 879 579 au WhatsApp. Dawati la Afisa wa Ulinzi wa Data linarekodi maombi ya ufikiaji, marekebisho, kufutwa, na kuzuia chini ya Sheria ya Ulinzi wa Data, 2019. Ofisi: Nairobi, Nakuru, Eldoret.",
         ],
       },
     ],

@@ -51,6 +51,9 @@ const assetSchema = z.object({
   saccoMemberNumber: z.string().optional().default(""),
   saccoNominees: z.array(nomineeSchema).max(10).optional().default([]),
   mpesaNumber: z.string().optional().default(""),
+  disputeFlag: z.boolean().optional().default(false),
+  disputeNotes: z.string().optional().default(""),
+  familyAlert: z.boolean().optional().default(false),
 });
 
 export async function GET() {
@@ -162,6 +165,17 @@ export async function POST(request: Request) {
     action: data.id ? "asset_updated" : "asset_created",
     detail: `${asset.title} (${asset.type})`,
   });
+
+  if (asset.documentPath || asset.titleNumber) {
+    const { notifyVaultStatus } = await import("@/lib/notify");
+    await notifyVaultStatus({
+      vaultId: access.vault.id,
+      action: "asset_secured",
+      body: asset.titleNumber
+        ? `Your Title Deed ${asset.titleNumber} has been secured in your ShambaTrust Vault.`
+        : `Your asset "${asset.title}" has been saved in your ShambaTrust Vault.`,
+    });
+  }
 
   return NextResponse.json({ asset });
 }

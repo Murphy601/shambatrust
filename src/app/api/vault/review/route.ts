@@ -214,6 +214,17 @@ export async function POST(request: Request) {
     /* routing is best effort */
   }
 
+  try {
+    const { notifyVaultStatus } = await import("@/lib/notify");
+    await notifyVaultStatus({
+      vaultId: access.vault.id,
+      action: "review_submitted",
+      body: `ShambaTrust: your vault has been submitted for advocate review. Status: pending.`,
+    });
+  } catch {
+    /* notices are best effort */
+  }
+
   return NextResponse.json({
     review,
     isAmendment,

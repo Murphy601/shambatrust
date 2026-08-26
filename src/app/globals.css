@@ -1,22 +1,31 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #eef3ee;
-  --bg-deep: #dfe8df;
-  --ink: #121a14;
-  --ink-muted: #3a463d;
-  --forest: #1f4d3a;
-  --forest-deep: #163528;
-  --brass: #8b5e24;
-  --brass-soft: #c9a46a;
+  /* Royal Landowner — elder / family / public (Google Doc palette) */
+  --bg: #f8f9fa;
+  --bg-deep: #eef2f0;
+  --ink: #0b1d3a;
+  --ink-muted: #3d4a56;
+  --forest: #1e5631;
+  --forest-deep: #0b1d3a;
+  --brass: #d4af37;
+  --brass-soft: #e8d48a;
   --soil: #4a3428;
   --surface: #ffffff;
-  --border: #b9c7bb;
-  --danger: #8b2e2e;
-  --warning: #8a5a12;
-  --success: #1f4d3a;
+  --border: #c5cdd6;
+  --danger: #b22222;
+  --warning: #d97706;
+  --success: #1e5631;
   --hero-overlay: rgba(11, 29, 58, 0.42);
-  --pattern: rgba(31, 77, 58, 0.06);
+  --pattern: rgba(30, 86, 49, 0.06);
+  --legal-navy: #0f172a;
+  --legal-sapphire: #0284c7;
+  --seal-green: #059669;
+  --ops-bg: #0d1117;
+  --ops-panel: #1e293b;
+  --ops-blue: #2563eb;
+  --ops-revenue: #16a34a;
+  --ops-insight: #7c3aed;
 }
 
 @theme inline {
@@ -77,7 +86,7 @@ a {
   background-image:
     radial-gradient(circle at 12% 18%, var(--pattern) 0, transparent 42%),
     radial-gradient(circle at 88% 8%, rgba(139, 94, 36, 0.08) 0, transparent 36%),
-    linear-gradient(180deg, #f5f8f4 0%, var(--bg) 38%, #e7efe8 100%);
+    linear-gradient(180deg, #f8f9fa 0%, var(--bg) 38%, #eef2f0 100%);
 }
 
 .section {
@@ -298,7 +307,7 @@ a {
 }
 
 .btn-brass:hover {
-  background: #734c1a;
+  background: #b8962e;
 }
 
 .field {

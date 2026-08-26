@@ -9,6 +9,9 @@ const links = [
   { href: "/vault", key: "vault" as const },
   { href: "/vault/assets", key: "assets" as const },
   { href: "/vault/heirs", key: "heirs" as const },
+  { href: "/vault/will", key: "will" as const },
+  { href: "/vault/trust", key: "trust" as const },
+  { href: "/vault/wishes", key: "wishes" as const },
   { href: "/vault/testament", key: "testament" as const },
   { href: "/vault/agent", key: "agent" as const },
   { href: "/vault/review", key: "review" as const },
@@ -38,20 +41,20 @@ export function VaultShell({
   }
 
   return (
-    <div className="min-h-screen">
-      <header className="border-b border-border bg-surface">
+    <div className="min-h-screen bg-[#F8F9FA]">
+      <header className="border-b border-[#0B1D3A] bg-[#0B1D3A] text-white">
         <div className="section flex flex-wrap items-center justify-between gap-3 py-4">
           <div>
             <Link
               href="/vault"
-              className="brand-font text-2xl font-semibold text-forest-deep"
+              className="brand-font text-2xl font-semibold text-white"
             >
               ShambaTrust
             </Link>
-            <p className="mt-1 text-base text-muted">
-              {t.welcome}, <span className="font-semibold text-ink">{fullName}</span>
+            <p className="mt-1 text-base text-slate-300">
+              {t.welcome}, <span className="font-semibold text-white">{fullName}</span>
               {" · "}
-              <span className="font-semibold text-forest">
+              <span className="font-semibold text-[#D4AF37]">
                 {asAgent ? t.agentBadge : t.ownerBadge}
               </span>
             </p>
@@ -60,14 +63,14 @@ export function VaultShell({
             <button
               type="button"
               onClick={toggleLocale}
-              className="min-h-11 rounded-[0.35rem] border-2 border-border bg-surface px-3 text-base font-semibold"
+              className="min-h-11 rounded-[0.35rem] border border-white/25 px-3 text-base font-semibold text-white"
             >
               {locale === "en" ? "Kiswahili" : "English"}
             </button>
             <button
               type="button"
               onClick={logout}
-              className="btn btn-secondary-dark min-h-11"
+              className="min-h-11 rounded-[0.35rem] border border-white/25 px-4 text-base font-semibold text-white hover:border-[#D4AF37]"
             >
               {t.logout}
             </button>
@@ -85,8 +88,8 @@ export function VaultShell({
                 href={link.href}
                 className={`whitespace-nowrap rounded-[0.35rem] px-3 py-2 text-base font-semibold ${
                   active
-                    ? "bg-forest text-white"
-                    : "border border-border bg-bg text-ink"
+                    ? "bg-[#1E5631] text-white"
+                    : "border border-white/20 bg-[#0B1D3A] text-slate-100 hover:border-[#D4AF37]"
                 }`}
               >
                 {t[link.key]}

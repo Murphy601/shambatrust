@@ -13,19 +13,19 @@ export function SiteFooter() {
       : "Hello ShambaTrust, I have a question about my legacy.";
 
   return (
-    <footer className="border-t border-border bg-surface py-12">
-      <div className="section grid gap-8 md:grid-cols-4">
+    <footer className="border-t border-[#0B1D3A] bg-[#0B1D3A] py-12 text-white">
+      <div className="section grid gap-8 sm:grid-cols-2 xl:grid-cols-4">
         <div>
-          <p className="brand-font text-2xl font-semibold text-forest-deep">
+          <p className="brand-font text-2xl font-semibold text-white">
             {t.brand}
           </p>
-          <p className="mt-2 text-base text-muted">{t.tagline}</p>
+          <p className="mt-2 text-base text-slate-300">{t.tagline}</p>
         </div>
         <div>
-          <p className="font-semibold text-forest-deep">{t.footer.hotline}</p>
+          <p className="font-semibold text-[#D4AF37]">{t.footer.hotline}</p>
           <a
             href="tel:+254748879579"
-            className="mt-2 block text-lg font-semibold text-ink underline-offset-4 hover:underline"
+            className="mt-2 block text-lg font-semibold text-white underline-offset-4 hover:underline"
           >
             {t.footer.hotlineNumber}
           </a>
@@ -33,29 +33,29 @@ export function SiteFooter() {
             href={buildWhatsAppUrl(message)}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-3 inline-block font-semibold text-forest underline-offset-4 hover:underline"
+            className="mt-3 inline-block font-semibold text-[#D4AF37] underline-offset-4 hover:underline"
           >
             WhatsApp
           </a>
         </div>
         <div>
-          <p className="font-semibold text-forest-deep">{t.footer.offices}</p>
-          <p className="mt-2 text-lg text-ink">{t.footer.officeList}</p>
+          <p className="font-semibold text-[#D4AF37]">{t.footer.offices}</p>
+          <p className="mt-2 text-lg text-slate-200">{t.footer.officeList}</p>
           <button
             type="button"
             onClick={toggleLocale}
-            className="mt-4 font-semibold text-forest underline-offset-4 hover:underline"
+            className="mt-4 font-semibold text-[#D4AF37] underline-offset-4 hover:underline"
           >
             {t.langToggle}
           </button>
         </div>
         <div>
-          <p className="font-semibold text-forest-deep">{t.footer.legal}</p>
+          <p className="font-semibold text-[#D4AF37]">{t.footer.legal}</p>
           <ul className="mt-2 space-y-2 text-lg">
             <li>
               <Link
                 href="/terms"
-                className="font-semibold text-ink underline-offset-4 hover:underline"
+                className="font-semibold text-white underline-offset-4 hover:underline"
               >
                 {t.footer.terms}
               </Link>
@@ -63,7 +63,7 @@ export function SiteFooter() {
             <li>
               <Link
                 href="/privacy"
-                className="font-semibold text-ink underline-offset-4 hover:underline"
+                className="font-semibold text-white underline-offset-4 hover:underline"
               >
                 {t.footer.privacyLink}
               </Link>
@@ -71,7 +71,7 @@ export function SiteFooter() {
             <li>
               <Link
                 href="/faq"
-                className="font-semibold text-ink underline-offset-4 hover:underline"
+                className="font-semibold text-white underline-offset-4 hover:underline"
               >
                 {t.footer.faq}
               </Link>
@@ -79,9 +79,14 @@ export function SiteFooter() {
           </ul>
         </div>
       </div>
-      <div className="section mt-10 border-t border-border pt-6">
-        <p className="text-base text-muted">{t.footer.privacy}</p>
-        <p className="mt-2 text-base text-muted">{t.footer.rights}</p>
+      <div className="section mt-10 border-t border-white/15 pt-6">
+        <p className="text-base text-slate-300">{t.footer.privacy}</p>
+        <p className="mt-2 text-base text-slate-300">
+          {locale === "sw"
+            ? "ShambaTrust ni jukwaa la teknolojia linalounganisha familia na mawakili wa LSK — si kampuni ya sheria."
+            : "ShambaTrust is a technology platform connecting families with LSK partner advocates — not a law firm."}
+        </p>
+        <p className="mt-2 text-base text-slate-300">{t.footer.rights}</p>
       </div>
     </footer>
   );

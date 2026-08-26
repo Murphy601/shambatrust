@@ -134,6 +134,30 @@ export default function AssetsPage() {
                         Document: {asset.documentName}
                       </p>
                     )}
+                    {asset.gpsLat != null && asset.gpsLng != null && (
+                      <p className="mt-1 text-base">
+                        <a
+                          className="font-semibold text-forest underline"
+                          href={`https://www.google.com/maps?q=${asset.gpsLat},${asset.gpsLng}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {locale === "sw" ? "Ramani ya GPS" : "GPS map pin"}
+                        </a>
+                      </p>
+                    )}
+                    {(asset.disputeFlag || asset.familyAlert) && (
+                      <p className="mt-2 font-semibold text-[var(--danger)]">
+                        {asset.disputeFlag
+                          ? locale === "sw"
+                            ? "Mzozo / caveat"
+                            : "Dispute / caveat"
+                          : locale === "sw"
+                            ? "Onyo la familia"
+                            : "Family alert"}
+                        {asset.disputeNotes ? ` — ${asset.disputeNotes}` : ""}
+                      </p>
+                    )}
                   </div>
                   {!locked && (
                     <button

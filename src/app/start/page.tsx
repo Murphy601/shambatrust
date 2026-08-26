@@ -22,6 +22,13 @@ const ACTIONS = [
     wa: "I want to sign in to my existing Shamba Vault.",
   },
   {
+    key: "advocate",
+    en: "Apply as an LSK advocate",
+    sw: "Jiunge kama wakili wa LSK",
+    href: "/advocates/apply",
+    wa: "I want to apply as a partner advocate with my LSK number.",
+  },
+  {
     key: "succession",
     en: "File or continue succession",
     sw: "Wasilisha au endelea na mirathi",
@@ -29,11 +36,11 @@ const ACTIONS = [
     wa: "I need help with succession filing.",
   },
   {
-    key: "advocate",
-    en: "Apply as partner advocate",
-    sw: "Omba kama wakili mshirika",
-    href: "/advocates/apply",
-    wa: "I want to apply as a ShambaTrust partner advocate.",
+    key: "deed",
+    en: "Send a title deed photo",
+    sw: "Tuma picha ya hati miliki",
+    href: "/signup",
+    wa: "I am sending a title deed photo for my family vault. Please file it under my elder's name.",
   },
 ] as const;
 
