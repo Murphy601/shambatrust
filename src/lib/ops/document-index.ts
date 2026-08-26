@@ -2,6 +2,7 @@ import {
   getLatestVaultBinder,
   listAssets,
   listAudioTestaments,
+  listBeneficiaries,
   listEldersNewestFirst,
   listLegalDocuments,
   listReviewRequests,
@@ -37,6 +38,11 @@ export type OpsDossierRow = {
   latestBinderId: string | null;
   latestBinderStatus: string | null;
   inspectUrl: string | null;
+  idOnFile: boolean;
+  assetsNote: string;
+  opsNotes: string;
+  reviewNotes: string;
+  familyNote: string;
 };
 
 export async function listOpsDocumentIndex(query = ""): Promise<{
@@ -49,12 +55,9 @@ export async function listOpsDocumentIndex(query = ""): Promise<{
   const dossiers: OpsDossierRow[] = [];
 
   for (const { user, vault } of elders) {
-    const hay = `${user.fullName} ${user.phone} ${user.county} ${vault?.id || ""} ${vault?.status || ""}`.toLowerCase();
-    if (q && !hay.includes(q) && !user.phone.includes(q.replace(/\D/g, ""))) {
-      continue;
-    }
-
     let fileCount = 0;
+    let searchHay = `${user.fullName} ${user.phone} ${user.county} ${user.address} ${vault?.id || ""} ${vault?.status || ""}`;
+    const pending: OpsFileRow[] = [];
 
     const pushKyc = (
       slot: "idFront" | "idBack",
@@ -64,7 +67,7 @@ export async function listOpsDocumentIndex(query = ""): Promise<{
     ) => {
       if (!path) return;
       fileCount += 1;
-      files.push({
+      pending.push({
         key: `${user.id}:${slot}`,
         elderId: user.id,
         elderName: user.fullName,
@@ -83,44 +86,55 @@ export async function listOpsDocumentIndex(query = ""): Promise<{
     pushKyc("idFront", "National ID — front", user.idFrontPath, user.idFrontName);
     pushKyc("idBack", "National ID — back", user.idBackPath, user.idBackName);
 
+    const matchesQuery = (hay: string) => {
+      if (!q) return true;
+      const digits = q.replace(/\D/g, "");
+      return hay.toLowerCase().includes(q) || Boolean(digits && user.phone.includes(digits));
+    };
+
     if (vault) {
-      const [assets, legalDocs, reviews, binders, testaments] = await Promise.all([
+      const [assets, legalDocs, reviews, binders, testaments, heirs] = await Promise.all([
         listAssets(vault.id),
         listLegalDocuments(vault.id),
         listReviewRequests(vault.id),
         listVaultBinders(vault.id),
         listAudioTestaments(vault.id),
+        listBeneficiaries(vault.id),
       ]);
       const reviewId = [...reviews].sort((a, b) =>
         b.createdAt.localeCompare(a.createdAt),
       )[0]?.id;
 
       for (const asset of assets) {
+        searchHay += ` ${asset.title} ${asset.titleNumber} ${asset.parcelNumber} ${asset.kraPin} ${asset.saccoName} ${asset.mpesaNumber} ${asset.documentName || ""}`;
         if (!asset.documentPath) continue;
         fileCount += 1;
         const view = reviewId
           ? `/api/secure-docs/view?kind=asset&reviewId=${reviewId}&assetId=${asset.id}`
           : `/api/secure-docs/view?kind=asset&vaultId=${vault.id}&assetId=${asset.id}`;
-        files.push({
+        pending.push({
           key: `asset:${asset.id}`,
           elderId: user.id,
           elderName: user.fullName,
           phone: user.phone,
           vaultId: vault.id,
           title: asset.documentName || asset.title,
-          type: asset.type.replace(/_/g, " "),
+          type: asset.titleNumber
+            ? `${asset.type.replace(/_/g, " ")} · ${asset.titleNumber}`
+            : asset.type.replace(/_/g, " "),
           source: "Asset vault intake",
           uploadedAt: asset.createdAt,
           status: "On file",
           viewUrl: view,
-          downloadUrl: null,
+          downloadUrl: view,
         });
       }
 
       for (const doc of legalDocs) {
+        searchHay += ` ${doc.title} ${doc.type}`;
         if (!doc.documentPath) continue;
         fileCount += 1;
-        files.push({
+        pending.push({
           key: `legal:${doc.id}`,
           elderId: user.id,
           elderName: user.fullName,
@@ -139,8 +153,9 @@ export async function listOpsDocumentIndex(query = ""): Promise<{
       }
 
       for (const testament of testaments) {
+        searchHay += ` ${testament.title}`;
         fileCount += 1;
-        files.push({
+        pending.push({
           key: `audio:${testament.id}`,
           elderId: user.id,
           elderName: user.fullName,
@@ -159,7 +174,7 @@ export async function listOpsDocumentIndex(query = ""): Promise<{
       for (const binder of binders) {
         if (!binder.documentPath) continue;
         fileCount += 1;
-        files.push({
+        pending.push({
           key: `binder:${binder.id}`,
           elderId: user.id,
           elderName: user.fullName,
@@ -176,6 +191,12 @@ export async function listOpsDocumentIndex(query = ""): Promise<{
       }
 
       const latest = await getLatestVaultBinder(vault.id);
+      const latestReview = [...reviews].sort((a, b) =>
+        b.createdAt.localeCompare(a.createdAt),
+      )[0];
+      searchHay += ` ${heirs.map((h) => `${h.fullName} ${h.idNumber}`).join(" ")} ${vault.opsNotes} ${latestReview?.notes || ""}`;
+      if (!matchesQuery(searchHay)) continue;
+      files.push(...pending);
       dossiers.push({
         elderId: user.id,
         fullName: user.fullName,
@@ -190,8 +211,24 @@ export async function listOpsDocumentIndex(query = ""): Promise<{
         latestBinderId: latest?.id || null,
         latestBinderStatus: latest?.status || null,
         inspectUrl: `/ops/vaults/${vault.id}`,
+        idOnFile: Boolean(user.idFrontPath || user.idBackPath),
+        assetsNote: assets
+          .map((asset) =>
+            [asset.title, asset.titleNumber, asset.parcelNumber]
+              .filter(Boolean)
+              .join(" · "),
+          )
+          .filter(Boolean)
+          .join("; ") || "No assets listed",
+        opsNotes: vault.opsNotes || "",
+        reviewNotes: latestReview?.notes || "",
+        familyNote:
+          heirs
+            .map((heir) => `${heir.fullName} (${heir.relationship || "heir"})`)
+            .join("; ") || "No heirs named",
       });
-    } else {
+    } else if (matchesQuery(searchHay)) {
+      files.push(...pending);
       dossiers.push({
         elderId: user.id,
         fullName: user.fullName,
@@ -206,6 +243,11 @@ export async function listOpsDocumentIndex(query = ""): Promise<{
         latestBinderId: null,
         latestBinderStatus: null,
         inspectUrl: null,
+        idOnFile: Boolean(user.idFrontPath || user.idBackPath),
+        assetsNote: "No vault yet",
+        opsNotes: "",
+        reviewNotes: "",
+        familyNote: "No heirs named",
       });
     }
   }

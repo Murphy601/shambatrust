@@ -72,7 +72,7 @@ export default function OpsDocumentsPage() {
       >
         <input
           className="min-w-[16rem] flex-1 rounded border border-[#3d4a40] bg-[#0f1411] px-3 py-2"
-          placeholder="Search elder, phone, title…"
+          placeholder="Search elder, phone, LR / title, KRA, heir…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
@@ -162,11 +162,32 @@ export default function OpsDocumentsPage() {
                     {row.phone} · {row.county}
                   </p>
                   <p className="mt-1 text-sm text-[#9aa89c]">{row.address}</p>
-                  <p className="mt-2 text-sm capitalize text-[#d4a574]">
+                  <p className="mt-2 text-sm text-[#9aa89c]">
                     {row.vaultStatus?.replace(/_/g, " ") || "no vault"}
                     {row.packageTier ? ` · ${row.packageTier}` : ""} ·{" "}
                     {row.fileCount} files · {row.heirsNote}
+                    {row.idOnFile ? " · ID on file" : " · ID missing"}
                   </p>
+                  <p className="mt-3 text-sm text-[#e8efe9]">
+                    <span className="font-semibold">Family: </span>
+                    {row.familyNote}
+                  </p>
+                  <p className="mt-1 text-sm text-[#e8efe9]">
+                    <span className="font-semibold">Assets: </span>
+                    {row.assetsNote}
+                  </p>
+                  {row.reviewNotes ? (
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-[#e8efe9]">
+                      <span className="font-semibold">Review notes: </span>
+                      {row.reviewNotes}
+                    </p>
+                  ) : null}
+                  {row.opsNotes ? (
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-[#e8efe9]">
+                      <span className="font-semibold">Ops notes: </span>
+                      {row.opsNotes}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {row.inspectUrl && (
