@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "shambatrust",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-08-26",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "workers_dev": true,
+  "preview_urls": true,
+  "observability": {
+    "enabled": true,
+  },
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS",
+  },
+  "services": [
+    {
+      // Self-reference required by OpenNext revalidation.
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "shambatrust",
+    },
+  ],
+  "vars": {
+    "NEXT_PUBLIC_WHATSAPP_NUMBER": "254748879579",
+    "AUTH_DEV_MODE": "true",
+  },
+}

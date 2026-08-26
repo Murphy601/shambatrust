@@ -1,3 +1,4 @@
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 import type { NextConfig } from "next";
 import path from "path";
 
@@ -11,6 +12,9 @@ const nextConfig: NextConfig = {
   // so these must stay outside the bundle.
   serverExternalPackages: ["pdfkit", "pdf-lib", "dejavu-fonts-ttf"],
   images: {
+    // Cloudflare Workers deploy does not bind Cloudflare Images yet, so skip
+    // the optimizer. Unsplash already serves sized assets.
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: "https",
@@ -21,3 +25,5 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+
+initOpenNextCloudflareForDev();

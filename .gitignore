@@ -35,8 +35,18 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
 
-# vercel
+# cloudflare / opennext
+.open-next
+.wrangler
+.mf
+cloudflare-env.d.ts
+
+# vercel (unused — this app deploys to Cloudflare Workers)
 .vercel
 
 # typescript

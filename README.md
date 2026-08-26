@@ -115,6 +115,7 @@ named heirs then read the released dossier at `/vault/released`.
 ```bash
 npm install
 cp .env.example .env.local
+cp .dev.vars.example .dev.vars
 ```
 
 ```
@@ -129,6 +130,57 @@ OPS_ADMIN_PHONES=254748879579
 ```bash
 npm run dev -- --port 3001
 ```
+
+## Deploy (Cloudflare Workers)
+
+This app ships on **Cloudflare Workers** via OpenNext, not Vercel.
+
+Local production-shaped preview:
+
+```bash
+npm run preview
+```
+
+Ship from a machine that is logged in to Wrangler (`npx wrangler login`):
+
+```bash
+npm run deploy
+```
+
+### Cloudflare dashboard (Git)
+
+Connect this GitHub repo in **Workers & Pages**. In build settings:
+
+| Setting | Value |
+| --- | --- |
+| Build command | `npx opennextjs-cloudflare build` |
+| Deploy command | `npx opennextjs-cloudflare deploy -- --keep-vars` |
+
+Set these as both **build** and **runtime** variables/secrets (Workers Builds inlines `NEXT_PUBLIC_*` at build time):
+
+| Name | Secret? | Notes |
+| --- | --- | --- |
+| `AUTH_SECRET` | yes | Long random string. Required in production. |
+| `OPS_ADMIN_PHONES` | yes | Comma-separated Kenyan numbers that can use `/ops`. |
+| `AUTH_DEV_MODE` | no | Defaults to on in `wrangler.jsonc` so OTP codes show on screen. Set `false` once SMS is live. |
+| `NEXT_PUBLIC_WHATSAPP_NUMBER` | no | Already set in `wrangler.jsonc`. |
+
+`--keep-vars` leaves dashboard secrets in place across deploys.
+
+### GitHub Actions
+
+`.github/workflows/deploy-cloudflare.yml` deploys this branch and `main` when these repository secrets exist:
+
+- `CLOUDFLARE_API_TOKEN` — token with Workers Scripts Edit
+- `CLOUDFLARE_ACCOUNT_ID`
+- `AUTH_SECRET` (optional; the Worker also reads dashboard secrets when `--keep-vars` is used)
+- `OPS_ADMIN_PHONES` (optional)
+
+Without `CLOUDFLARE_API_TOKEN` the workflow skips deploy instead of failing.
+
+The live Worker URL is `https://shambatrust.<your-subdomain>.workers.dev` until a custom domain is attached.
+
+Local `.data/` JSON and uploads are **ephemeral** on Workers. The vault still runs for confirmation; lasting storage is Supabase / R2 later.
 
 ### Succession demo path
 
