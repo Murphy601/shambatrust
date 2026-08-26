@@ -180,6 +180,8 @@ Without `CLOUDFLARE_API_TOKEN` the workflow skips deploy instead of failing.
 
 The live Worker URL is `https://shambatrust.<your-subdomain>.workers.dev` until a custom domain is attached.
 
+The OpenNext bundle is about **2.4 MiB gzipped**, so this needs **Workers Paid** (10 MiB script limit). The free / temporary 1 MiB cap cannot host this app.
+
 Local `.data/` JSON and uploads are **ephemeral** on Workers. The vault still runs for confirmation; lasting storage is Supabase / R2 later.
 
 ### Succession demo path
