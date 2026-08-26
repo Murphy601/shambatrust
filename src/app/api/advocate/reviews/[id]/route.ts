@@ -10,8 +10,10 @@ import {
   findUserById,
   getReviewRequest,
   getVaultById,
+  listAdvocateMatchesForReview,
   listAllocations,
   listAssets,
+  listAudioTestaments,
   listBeneficiaries,
   listLegalDocuments,
   listLegalDocumentsForReview,
@@ -19,6 +21,7 @@ import {
   listTitleLookups,
   updateReviewRequest,
 } from "@/lib/db/store";
+import { spokenLanguageLabel } from "@/lib/languages";
 import type { Asset, Beneficiary } from "@/lib/db/types";
 
 type Params = { params: Promise<{ id: string }> };
@@ -55,6 +58,12 @@ function redactAsset(a: Asset) {
     landmark: "",
     gpsLat: null as number | null,
     gpsLng: null as number | null,
+    parcelNumber: a.parcelNumber ? "••••" : "",
+    blockNumber: a.blockNumber ? "••••" : "",
+    registrationSection: "",
+    // County registry office is not sensitive and tells an advocate whether the
+    // matter is even in their jurisdiction before they claim it.
+    landRegistryOffice: a.landRegistryOffice || "",
     registrationNumber: "",
     makeModel: "",
     year: "",
@@ -63,6 +72,10 @@ function redactAsset(a: Asset) {
     accountType: "",
     businessRegNumber: "",
     kraPin: "",
+    saccoName: a.saccoName || "",
+    saccoMemberNumber: "",
+    saccoNominees: [] as Asset["saccoNominees"],
+    mpesaNumber: "",
     createdAt: a.createdAt,
     updatedAt: a.updatedAt,
   };
@@ -126,6 +139,8 @@ export async function GET(_request: Request, { params }: Params) {
     sealHistory,
     lookups,
     vaultReviews,
+    testaments,
+    matches,
   ] =
     await Promise.all([
       findUserById(vault.ownerId),
@@ -136,7 +151,12 @@ export async function GET(_request: Request, { params }: Params) {
       listLegalDocuments(vault.id),
       listTitleLookups(vault.id),
       listReviewRequests(vault.id),
+      listAudioTestaments(vault.id),
+      listAdvocateMatchesForReview(review.id),
     ]);
+
+  const myMatch =
+    matches.find((match) => match.advocateId === access.session.userId) || null;
 
   const previousReview = vaultReviews
     .filter(
@@ -220,6 +240,26 @@ export async function GET(_request: Request, { params }: Params) {
       : [],
     lookups: sensitive ? lookups : [],
     delta: sensitive ? delta : null,
+    // Recordings are listed either way so an advocate knows the elder left a
+    // spoken statement, but the audio only plays once the case is claimed.
+    testaments: testaments.map((t) => ({
+      id: t.id,
+      title: t.title,
+      languageLabel: spokenLanguageLabel(t.language),
+      durationSeconds: t.durationSeconds,
+      transcript: sensitive ? t.transcript : "",
+      transcriptStatus: t.transcriptStatus,
+      recordedByAgent: t.recordedByAgent,
+      assetId: t.assetId,
+      createdAt: t.createdAt,
+    })),
+    match: myMatch
+      ? {
+          status: myMatch.status,
+          reason: myMatch.reason,
+          matchedCounties: myMatch.matchedCounties,
+        }
+      : null,
     access: {
       sensitive,
       docAccess,

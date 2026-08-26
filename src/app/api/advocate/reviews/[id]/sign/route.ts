@@ -106,6 +106,18 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: "Document not on this case." }, { status: 404 });
   }
 
+  // Stamp first, then sign: the signature attests to a document the advocate
+  // has already verified and marked with their practising number.
+  if (!existing.stampedAt) {
+    return NextResponse.json(
+      {
+        error:
+          "Apply your legal stamp to this document before e-signing it.",
+      },
+      { status: 400 },
+    );
+  }
+
   const signed = await signLegalDocument({
     documentId,
     advocateUserId: access.session.userId,

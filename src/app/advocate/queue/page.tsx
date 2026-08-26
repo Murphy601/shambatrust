@@ -21,6 +21,9 @@ type QueueItem = {
   slaAgeHours: number;
   urgency: "fresh" | "aging" | "urgent";
   isAmendment: boolean;
+  matched: boolean;
+  matchReason: string | null;
+  matchedCounties: string[];
 };
 
 export default function AdvocateQueuePage() {
@@ -79,7 +82,10 @@ export default function AdvocateQueuePage() {
     }
   }
 
-  const open = reviews.filter((r) => r.status === "submitted");
+  const matchedToMe = reviews.filter(
+    (r) => r.status === "submitted" && r.matched,
+  );
+  const open = reviews.filter((r) => r.status === "submitted" && !r.matched);
   const mine = reviews.filter(
     (r) => r.status === "assigned" && r.isMine,
   );
@@ -174,6 +180,15 @@ export default function AdvocateQueuePage() {
       )}
 
       <QueueSection
+        title={t.matchedCases}
+        description={t.matchedHint}
+        items={matchedToMe}
+        t={t}
+        busyId={busyId}
+        onClaim={claim}
+        showClaim
+      />
+      <QueueSection
         title={t.openCases}
         items={open}
         t={t}
@@ -203,6 +218,7 @@ export default function AdvocateQueuePage() {
 
 function QueueSection({
   title,
+  description,
   items,
   t,
   busyId,
@@ -210,6 +226,7 @@ function QueueSection({
   showClaim,
 }: {
   title: string;
+  description?: string;
   items: QueueItem[];
   t: ReturnType<typeof advocateCopy>;
   busyId: string | null;
@@ -221,11 +238,14 @@ function QueueSection({
   return (
     <section className="space-y-3">
       <h2 className="text-2xl font-semibold text-forest-deep">{title}</h2>
+      {description && <p className="text-base text-muted">{description}</p>}
       <ul className="space-y-3">
         {items.map((item) => (
           <li
             key={item.id}
-            className="rounded-[0.45rem] border-2 border-border bg-surface p-5"
+            className={`rounded-[0.45rem] border-2 bg-surface p-5 ${
+              item.matched ? "border-brass" : "border-border"
+            }`}
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -249,6 +269,12 @@ function QueueSection({
                   {item.slaAgeHours}h
                   {item.counties.length ? ` · ${item.counties.join(", ")}` : ""}
                 </p>
+                {item.matched && item.matchReason && (
+                  <p className="mt-2 rounded-[0.35rem] bg-[color-mix(in_srgb,var(--brass)_14%,white)] px-3 py-2 text-base text-ink">
+                    <span className="font-semibold">{t.matchedBadge}:</span>{" "}
+                    {item.matchReason}
+                  </p>
+                )}
                 {item.notes && (
                   <p className="mt-2 text-base text-ink">{item.notes}</p>
                 )}

@@ -5,7 +5,9 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useLocale } from "@/components/locale-provider";
 import { formatPhoneDisplay } from "@/lib/auth/phone";
+import { formatDuration } from "@/lib/audio";
 import { advocateCopy } from "@/lib/advocate-copy";
+import { nomineeTotal, parcelIdentifiers } from "@/lib/asset-fields";
 import { ADVOCATE_SLA_NOTICE_EN, ADVOCATE_SLA_NOTICE_SW } from "@/lib/compliance/notices";
 import type {
   Allocation,
@@ -51,6 +53,22 @@ type CasePayload = {
     allocations: { before: number; now: number };
     newAssetTitles: string[];
   } | null;
+  testaments: Array<{
+    id: string;
+    title: string;
+    languageLabel: string;
+    durationSeconds: number | null;
+    transcript: string;
+    transcriptStatus: string;
+    recordedByAgent: boolean;
+    assetId: string | null;
+    createdAt: string;
+  }>;
+  match: {
+    status: string;
+    reason: string;
+    matchedCounties: string[];
+  } | null;
   access: {
     sensitive: boolean;
     docAccess: boolean;
@@ -84,6 +102,10 @@ export default function AdvocateCasePage() {
   const [docType, setDocType] = useState<"will" | "land_trust" | "poa">("will");
   const [docTitle, setDocTitle] = useState("");
   const [docBody, setDocBody] = useState("");
+
+  const [stampDocId, setStampDocId] = useState("");
+  const [stampCounty, setStampCounty] = useState("");
+  const [stampNotes, setStampNotes] = useState("");
 
   const [signDocId, setSignDocId] = useState("");
   const [signatureName, setSignatureName] = useState("");
@@ -134,6 +156,9 @@ export default function AdvocateCasePage() {
       if (!signDocId && json.documents?.[0]) {
         setSignDocId(json.documents[0].id);
       }
+      if (!stampDocId && json.documents?.[0]) {
+        setStampDocId(json.documents[0].id);
+      }
       const land = (json.assets as Asset[]).find(
         (a) => a.type === "land" || a.type === "commercial_plot",
       );
@@ -147,7 +172,7 @@ export default function AdvocateCasePage() {
     } finally {
       setLoading(false);
     }
-  }, [id, signDocId]);
+  }, [id, signDocId, stampDocId]);
 
   useEffect(() => {
     void load();
@@ -301,6 +326,32 @@ export default function AdvocateCasePage() {
     }
   }
 
+  async function applyStamp(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/advocate/reviews/${id}/stamp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          documentId: stampDocId,
+          county: stampCounty,
+          notes: stampNotes,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not stamp document");
+      setMessage(`Legal stamp ${json.document.stampRef} applied.`);
+      setStampNotes("");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not stamp document");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function signAndSeal(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
@@ -358,11 +409,15 @@ export default function AdvocateCasePage() {
     sealHistory,
     lookups,
     delta,
+    testaments,
+    match,
     access,
   } = data;
   const landAssets = assets.filter(
     (a) => a.type === "land" || a.type === "commercial_plot",
   );
+  const stampTarget = documents.find((d) => d.id === stampDocId) || null;
+  const signTarget = documents.find((d) => d.id === signDocId) || null;
   const slaNotice = locale === "sw" ? ADVOCATE_SLA_NOTICE_SW : ADVOCATE_SLA_NOTICE_EN;
   const packageAmount = BILLING_AMOUNTS_KES.review_submitted[review.packageTier];
   const advocateShare = Math.round(packageAmount * FEE_SPLIT.advocateShare);
@@ -406,6 +461,12 @@ export default function AdvocateCasePage() {
             </button>
           </div>
         )}
+        {match && match.status === "offered" && (
+          <p className="mt-4 rounded-[0.35rem] border-2 border-brass bg-[color-mix(in_srgb,var(--brass)_10%,white)] px-4 py-3 text-base">
+            <span className="font-semibold">{t.matchedBadge}:</span>{" "}
+            {match.reason}
+          </p>
+        )}
         {access.reason && (
           <p className="mt-4 rounded-[0.35rem] border border-border bg-surface px-4 py-3 text-base text-muted">
             {access.reason}
@@ -440,6 +501,47 @@ export default function AdvocateCasePage() {
               <span className="font-semibold">{a.title}</span> ({a.type})
               {a.titleNumber ? ` · LR/Title: ${a.titleNumber}` : ""}
               {a.county ? ` · ${a.county}` : ""}
+              {parcelIdentifiers(a).length > 0 && (
+                <dl className="mt-1 grid gap-x-4 gap-y-0.5 sm:grid-cols-2">
+                  {parcelIdentifiers(a).map((row) => (
+                    <div key={row.label} className="flex gap-2">
+                      <dt className="text-muted">{row.label}:</dt>
+                      <dd className="font-semibold">{row.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+              {a.type === "sacco" && (
+                <div className="mt-1">
+                  {a.saccoName ? (
+                    <p className="text-muted">
+                      SACCO: {a.saccoName}
+                      {a.saccoMemberNumber
+                        ? ` · member ${a.saccoMemberNumber}`
+                        : ""}
+                    </p>
+                  ) : null}
+                  {a.saccoNominees.length > 0 && (
+                    <>
+                      <p className="mt-1 font-semibold">
+                        Nominees ({nomineeTotal(a.saccoNominees)}%) — paid
+                        outside the estate under SACCO bylaws
+                      </p>
+                      <ul className="mt-0.5 pl-4 text-muted">
+                        {a.saccoNominees.map((nominee) => (
+                          <li key={nominee.id}>
+                            {nominee.fullName}
+                            {nominee.relationship
+                              ? ` — ${nominee.relationship}`
+                              : ""}{" "}
+                            · {nominee.percentage}%
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </div>
+              )}
               {a.hasDocument || a.documentName ? (
                 <div className="mt-1">
                   {access.docAccess ? (
@@ -496,6 +598,57 @@ export default function AdvocateCasePage() {
             );
           })}
         </ul>
+      </section>
+
+      <section className="rounded-[0.45rem] border-2 border-border bg-surface p-5 sm:p-7">
+        <h2 className="text-2xl font-semibold text-forest-deep">
+          {t.testaments}
+        </h2>
+        {testaments.length === 0 ? (
+          <p className="mt-3 text-base text-muted">{t.noTestaments}</p>
+        ) : (
+          <ul className="mt-4 space-y-4">
+            {testaments.map((testament) => {
+              const asset = assets.find((a) => a.id === testament.assetId);
+              return (
+                <li
+                  key={testament.id}
+                  className="rounded-[0.35rem] border border-border p-4"
+                >
+                  <p className="text-lg font-semibold text-ink">
+                    {testament.title}
+                  </p>
+                  <p className="text-base text-muted">
+                    {testament.languageLabel} ·{" "}
+                    {formatDuration(testament.durationSeconds)} ·{" "}
+                    {testament.transcriptStatus.replace(/_/g, " ")}
+                    {asset ? ` · ${asset.title}` : ""}
+                    {testament.recordedByAgent
+                      ? " · captured by family agent"
+                      : ""}
+                  </p>
+                  {access.docAccess ? (
+                    <audio
+                      className="mt-3 w-full"
+                      controls
+                      preload="none"
+                      src={`/api/vault/testaments/${testament.id}/audio`}
+                    />
+                  ) : (
+                    <p className="mt-2 text-base text-muted">
+                      Claim this case to play the recording.
+                    </p>
+                  )}
+                  {testament.transcript && (
+                    <p className="mt-3 whitespace-pre-wrap text-base text-ink">
+                      {testament.transcript}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </section>
 
       {delta && (
@@ -806,6 +959,20 @@ export default function AdvocateCasePage() {
               ·{" "}
               <span className="capitalize text-forest">{d.status.replace(/_/g, " ")}</span>
               {d.signatureName ? ` · signed: ${d.signatureName}` : ""}
+              <div
+                className={`mt-1 text-sm font-semibold ${
+                  d.stampedAt ? "text-forest" : "text-brass"
+                }`}
+              >
+                {d.stampedAt
+                  ? `${t.stamped} · ${d.stampRef} · ${d.stampAdvocateName}${
+                      d.stampLskNumber ? ` (LSK ${d.stampLskNumber})` : ""
+                    }${d.stampCounty ? ` · ${d.stampCounty}` : ""}`
+                  : t.notStamped}
+              </div>
+              {d.stampNotes && (
+                <div className="text-sm text-muted">{d.stampNotes}</div>
+              )}
               {d.hasFile && access.docAccess ? (
                 <>
                   {" · "}
@@ -876,6 +1043,72 @@ export default function AdvocateCasePage() {
       </section>
 
       <section className="rounded-[0.45rem] border-2 border-border bg-surface p-5 sm:p-7">
+        <h2 className="text-2xl font-semibold text-forest-deep">{t.stamp}</h2>
+        <p className="mt-2 text-base text-muted">{t.stampHint}</p>
+        {documents.length === 0 ? (
+          <p className="mt-3 text-base text-muted">
+            Add a document draft above before stamping.
+          </p>
+        ) : (
+          <form onSubmit={applyStamp} className="mt-4 grid gap-4">
+            <div>
+              <label className="field-label" htmlFor="stampDoc">
+                Document
+              </label>
+              <select
+                id="stampDoc"
+                className="field"
+                value={stampDocId}
+                onChange={(e) => setStampDocId(e.target.value)}
+                required
+              >
+                <option value="">Select…</option>
+                {documents.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.title} ({d.stampedAt ? t.stamped : t.notStamped})
+                  </option>
+                ))}
+              </select>
+            </div>
+            {stampTarget?.stampedAt && (
+              <p className="rounded-[0.35rem] border border-forest bg-[color-mix(in_srgb,var(--forest)_8%,white)] px-3 py-2 text-base">
+                Already stamped as {stampTarget.stampRef} on{" "}
+                {new Date(stampTarget.stampedAt).toLocaleString()}. Re-stamping
+                keeps the same reference and updates the annotation.
+              </p>
+            )}
+            <div>
+              <label className="field-label" htmlFor="stampCounty">
+                {t.stampCounty}
+              </label>
+              <input
+                id="stampCounty"
+                className="field"
+                value={stampCounty}
+                onChange={(e) => setStampCounty(e.target.value)}
+                placeholder="e.g. Nakuru"
+              />
+            </div>
+            <div>
+              <label className="field-label" htmlFor="stampNotes">
+                {t.stampNotes}
+              </label>
+              <textarea
+                id="stampNotes"
+                className="field min-h-24"
+                value={stampNotes}
+                onChange={(e) => setStampNotes(e.target.value)}
+                placeholder="Clauses verified, title search reference, witnesses present…"
+              />
+            </div>
+            <button type="submit" className="btn btn-brass" disabled={busy}>
+              {busy ? "…" : t.applyStamp}
+            </button>
+          </form>
+        )}
+      </section>
+
+      <section className="rounded-[0.45rem] border-2 border-border bg-surface p-5 sm:p-7">
         <h2 className="text-2xl font-semibold text-forest-deep">{t.eSign}</h2>
         <p className="mt-2 text-base text-muted">{t.sealHint}</p>
         <form onSubmit={signAndSeal} className="mt-4 grid gap-4">
@@ -897,6 +1130,11 @@ export default function AdvocateCasePage() {
                 </option>
               ))}
             </select>
+            {signTarget && !signTarget.stampedAt && (
+              <p className="mt-2 text-base font-semibold text-[var(--danger)]">
+                {t.stampRequired}
+              </p>
+            )}
           </div>
           <div>
             <label className="field-label" htmlFor="sigName">
@@ -931,7 +1169,11 @@ export default function AdvocateCasePage() {
             />
             {t.sealVault}
           </label>
-          <button type="submit" className="btn btn-primary" disabled={busy}>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={busy || !signTarget?.stampedAt}
+          >
             {busy ? "…" : t.eSign}
           </button>
         </form>

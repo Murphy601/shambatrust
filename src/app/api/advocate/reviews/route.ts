@@ -3,6 +3,7 @@ import { requireAdvocateAccess } from "@/lib/advocate-access";
 import {
   findUserById,
   getVaultById,
+  listAdvocateMatchesForAdvocate,
   listAssets,
   listAllReviewRequests,
 } from "@/lib/db/store";
@@ -18,7 +19,16 @@ export async function GET(request: Request) {
   const county = (params.get("county") || "").trim().toLowerCase();
   const packageTier = params.get("packageTier") || "";
   const reviewKind = params.get("reviewKind") || "";
-  const reviews = await listAllReviewRequests();
+  const matchedOnly = params.get("matched") === "true";
+
+  const [reviews, myMatches] = await Promise.all([
+    listAllReviewRequests(),
+    listAdvocateMatchesForAdvocate(access.session.userId),
+  ]);
+  const matchByReview = new Map(
+    myMatches.map((match) => [match.reviewRequestId, match]),
+  );
+
   const enriched = await Promise.all(
     reviews.map(async (review) => {
       const vault = await getVaultById(review.vaultId);
@@ -26,6 +36,7 @@ export async function GET(request: Request) {
         vault ? findUserById(vault.ownerId) : null,
         listAssets(review.vaultId),
       ]);
+      const match = matchByReview.get(review.id);
       const vaultReviewCount = reviews.filter(
         (candidate) => candidate.vaultId === review.vaultId,
       ).length;
@@ -51,6 +62,9 @@ export async function GET(request: Request) {
         urgency:
           slaAgeHours >= 48 ? "urgent" : slaAgeHours >= 24 ? "aging" : "fresh",
         isAmendment: Boolean(vault?.amendmentFeeCharged || vaultReviewCount > 1),
+        matched: Boolean(match && match.status === "offered"),
+        matchReason: match?.reason || null,
+        matchedCounties: match?.matchedCounties || [],
       };
     }),
   );
@@ -63,6 +77,7 @@ export async function GET(request: Request) {
     if (packageTier && review.packageTier !== packageTier) return false;
     if (reviewKind === "amendment" && !review.isAmendment) return false;
     if (reviewKind === "first" && review.isAmendment) return false;
+    if (matchedOnly && !review.matched) return false;
     return true;
   });
 

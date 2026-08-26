@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import { KENYA_COUNTIES } from "@/lib/kenya-counties";
 import type { User } from "@/lib/db/types";
 
 export default function AdvocateProfilePage() {
@@ -9,6 +10,7 @@ export default function AdvocateProfilePage() {
   const [maxCases, setMaxCases] = useState("");
   const [oooUntil, setOooUntil] = useState("");
   const [oooNote, setOooNote] = useState("");
+  const [counties, setCounties] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -26,8 +28,17 @@ export default function AdvocateProfilePage() {
       setMaxCases(json.profile.advocateMaxCases?.toString() || "");
       setOooUntil(json.profile.advocateOooUntil?.slice(0, 16) || "");
       setOooNote(json.profile.advocateOooNote || "");
+      setCounties(json.profile.advocateCounties || []);
     })();
   }, []);
+
+  function toggleCounty(county: string) {
+    setCounties((current) =>
+      current.includes(county)
+        ? current.filter((value) => value !== county)
+        : [...current, county],
+    );
+  }
 
   async function save(event: FormEvent) {
     event.preventDefault();
@@ -42,12 +53,13 @@ export default function AdvocateProfilePage() {
           advocateMaxCases: maxCases ? Number(maxCases) : null,
           advocateOooUntil: oooUntil ? new Date(oooUntil).toISOString() : null,
           advocateOooNote: oooNote,
+          advocateCounties: counties,
         }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Save failed.");
       setProfile(json.profile);
-      setMessage("Availability saved.");
+      setMessage("Profile saved.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Save failed.");
     } finally {
@@ -58,10 +70,10 @@ export default function AdvocateProfilePage() {
   if (!profile && !error) return <p className="text-muted">Loading profile…</p>;
 
   return (
-    <div className="mx-auto max-w-xl space-y-6">
+    <div className="mx-auto max-w-2xl space-y-6">
       <div>
         <h1 className="text-3xl font-semibold text-forest-deep">
-          Profile & availability
+          Profile, coverage &amp; availability
         </h1>
         <p className="mt-2 text-muted">
           {profile?.fullName} · LSK {profile?.advocateLicense || "—"} · Active
@@ -75,10 +87,41 @@ export default function AdvocateProfilePage() {
       )}
       {error && <p className="text-[var(--danger)]">{error}</p>}
       {message && <p className="font-semibold text-forest">{message}</p>}
+
       <form
         onSubmit={save}
-        className="space-y-4 rounded-[0.45rem] border-2 border-border bg-surface p-5"
+        className="space-y-6 rounded-[0.45rem] border-2 border-border bg-surface p-5"
       >
+        <fieldset>
+          <legend className="text-xl font-semibold text-forest-deep">
+            Counties you practise in
+          </legend>
+          <p className="mt-1 text-base text-muted">
+            New dossiers are routed automatically to advocates covering the
+            counties where the estate&apos;s land sits. Select none and you will
+            only see the open queue.
+          </p>
+          <p className="mt-2 text-base font-semibold text-forest">
+            {counties.length} selected
+          </p>
+          <div className="mt-3 grid max-h-72 gap-1 overflow-y-auto rounded-[0.35rem] border border-border p-3 sm:grid-cols-2 lg:grid-cols-3">
+            {KENYA_COUNTIES.map((county) => (
+              <label
+                key={county}
+                className="flex min-h-10 items-center gap-2 text-base"
+              >
+                <input
+                  type="checkbox"
+                  className="h-5 w-5"
+                  checked={counties.includes(county)}
+                  onChange={() => toggleCounty(county)}
+                />
+                {county}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
         <div>
           <label className="field-label" htmlFor="max">
             Max concurrent cases
@@ -105,6 +148,9 @@ export default function AdvocateProfilePage() {
             value={oooUntil}
             onChange={(event) => setOooUntil(event.target.value)}
           />
+          <p className="mt-1 text-base text-muted">
+            While out of office you are skipped by automated routing.
+          </p>
         </div>
         <div>
           <label className="field-label" htmlFor="note">

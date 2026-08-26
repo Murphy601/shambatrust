@@ -6,6 +6,7 @@ import { PDFDocument as PdfLibDocument } from "pdf-lib";
 import type {
   Allocation,
   Asset,
+  AudioTestament,
   Beneficiary,
   ExecutionPlan,
   LegalDocument,
@@ -25,6 +26,7 @@ import {
   getReviewRequest,
   listAllocations,
   listAssets,
+  listAudioTestaments,
   listAudit,
   listBeneficiaries,
   listLegalDocumentsForReview,
@@ -34,6 +36,7 @@ import {
   getVaultById,
   getVaultBinder,
 } from "@/lib/db/store";
+import { spokenLanguageLabel } from "@/lib/languages";
 
 type Snapshot = {
   vault: Vault;
@@ -46,6 +49,7 @@ type Snapshot = {
   documents: LegalDocument[];
   lookups: TitleLookupRecord[];
   plan: ExecutionPlan | null;
+  testaments: AudioTestament[];
   auditLines: string[];
   sealedAt: string;
   version: number;
@@ -181,13 +185,37 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
       doc.font("Helvetica-Bold").text(`${i + 1}. ${asset.title} (${asset.type})`);
       doc.font("Helvetica");
       if (asset.titleNumber) line("Title number", asset.titleNumber);
+      if (asset.parcelNumber) line("Parcel number", asset.parcelNumber);
+      if (asset.blockNumber) line("Block number", asset.blockNumber);
+      if (asset.registrationSection) {
+        line("Registration section", asset.registrationSection);
+      }
+      if (asset.landRegistryOffice) {
+        line("County land registry", asset.landRegistryOffice);
+      }
       if (asset.county) line("County", asset.county);
       if (asset.subCounty) line("Sub-county", asset.subCounty);
       if (asset.landmark) line("Landmark", asset.landmark);
+      if (asset.gpsLat != null && asset.gpsLng != null) {
+        line("GPS pin", `${asset.gpsLat}, ${asset.gpsLng}`);
+      }
       if (asset.registrationNumber) line("Registration", asset.registrationNumber);
       if (asset.makeModel) line("Make/model", asset.makeModel);
       if (asset.bankName) line("Bank", `${asset.bankName} ${asset.accountNumber}`.trim());
       if (asset.businessRegNumber) line("Business reg", asset.businessRegNumber);
+      if (asset.saccoName) line("SACCO", asset.saccoName);
+      if (asset.saccoMemberNumber) line("SACCO member", asset.saccoMemberNumber);
+      if (asset.mpesaNumber) line("Linked M-Pesa", asset.mpesaNumber);
+      if (asset.saccoNominees.length > 0) {
+        doc.font("Helvetica-Bold").text("SACCO nominees (paid outside the estate)");
+        doc.font("Helvetica");
+        for (const nominee of asset.saccoNominees) {
+          doc.text(
+            `• ${nominee.fullName}${nominee.relationship ? ` (${nominee.relationship})` : ""} — ${nominee.percentage}%` +
+              (nominee.idNumber ? ` · ID ${nominee.idNumber}` : ""),
+          );
+        }
+      }
       if (asset.notes) line("Notes", asset.notes);
       if (asset.documentName) line("Attached deed", asset.documentName);
     }
@@ -240,8 +268,16 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
         String(snapshot.plan.minTrusteeApprovals),
       );
       line(
+        "Min guardian confirmations",
+        String(snapshot.plan.minGuardianApprovals),
+      );
+      line(
         "Death certificate required",
         snapshot.plan.requireDeathCertificate ? "Yes" : "No",
+      );
+      line(
+        "Death notification required",
+        snapshot.plan.requireDeathNotification ? "Yes" : "No",
       );
       line("Cooling hours", String(snapshot.plan.coolingHours));
       doc.moveDown(0.3);
@@ -250,6 +286,19 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
       for (const t of snapshot.plan.trustees || []) {
         doc.text(
           `• ${t.fullName} · ${t.phone || "—"}${t.idNumber ? ` · ID ${t.idNumber}` : ""}`,
+        );
+      }
+      doc.moveDown(0.3);
+      doc.font("Helvetica-Bold").text("Guardians (dual verification)");
+      doc.font("Helvetica");
+      if ((snapshot.plan.guardians || []).length === 0) {
+        doc.text("None named.");
+      }
+      for (const g of snapshot.plan.guardians || []) {
+        doc.text(
+          `• ${g.fullName} · ${g.phone || "—"}${g.relationship ? ` · ${g.relationship}` : ""}${
+            g.idNumber ? ` · ID ${g.idNumber}` : ""
+          }`,
         );
       }
     }
@@ -286,6 +335,18 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
         .font("Helvetica-Bold")
         .text(`${d.title} (${d.type}) — ${d.status}`)
         .font("Helvetica");
+      if (d.stampRef) {
+        line(
+          "Legal stamp",
+          `${d.stampRef} · ${d.stampAdvocateName || "—"}` +
+            (d.stampLskNumber ? ` · LSK ${d.stampLskNumber}` : "") +
+            (d.stampCounty ? ` · ${d.stampCounty}` : "") +
+            (d.stampedAt
+              ? ` · ${new Date(d.stampedAt).toLocaleString("en-KE")}`
+              : ""),
+        );
+        if (d.stampNotes) line("Stamp annotation", d.stampNotes);
+      }
       if (d.signatureName) {
         line("Signed by", `${d.signatureName} at ${d.signedAt || "—"}`);
       }
@@ -314,9 +375,45 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
       if (lookup.result?.ownerName) line("Registry owner", lookup.result.ownerName);
     }
 
+    // Voice testaments
+    h("9. Voice testaments");
+    if (snapshot.testaments.length === 0) {
+      doc.text("No spoken statements recorded.");
+    }
+    for (const testament of snapshot.testaments) {
+      doc.moveDown(0.4);
+      doc
+        .font("Helvetica-Bold")
+        .text(`${testament.title} (${spokenLanguageLabel(testament.language)})`)
+        .font("Helvetica");
+      line(
+        "Recorded",
+        `${new Date(testament.createdAt).toLocaleString("en-KE")}${
+          testament.recordedByAgent ? " · captured by family agent" : ""
+        }`,
+      );
+      line("Transcript status", testament.transcriptStatus.replace(/_/g, " "));
+      if (testament.transcript.trim()) {
+        doc.moveDown(0.2);
+        doc.fontSize(9).text(testament.transcript.trim());
+        doc.fontSize(10);
+      }
+    }
+    doc
+      .moveDown(0.4)
+      .font("Helvetica-Oblique")
+      .fontSize(9)
+      .fillColor("#555555")
+      .text(
+        "Recordings evidence the testator's spoken intent. They support, and do not replace, the certified instruments above.",
+      )
+      .font("Helvetica")
+      .fontSize(10)
+      .fillColor("#222222");
+
     // Seal attestation
     doc.addPage();
-    h("9. Seal attestation");
+    h("10. Seal attestation");
     line("Sealed at", new Date(snapshot.sealedAt).toLocaleString("en-KE"));
     line("Advocate", snapshot.advocateName);
     if (snapshot.advocate?.advocateLicense) {
@@ -334,7 +431,7 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
     // Embedded images appendix
     if (imageAttachments.length > 0) {
       doc.addPage();
-      h("10. Embedded identity & deed images");
+      h("11. Embedded identity & deed images");
       for (const att of imageAttachments) {
         doc.moveDown(0.4);
         doc.font("Helvetica-Bold").text(att.label);
@@ -405,6 +502,7 @@ async function buildSnapshot(input: {
     documents,
     lookups,
     plan,
+    testaments,
     audit,
   ] = await Promise.all([
     listAssets(input.vaultId),
@@ -413,6 +511,7 @@ async function buildSnapshot(input: {
     listLegalDocumentsForReview(input.reviewRequestId),
     listTitleLookups(input.vaultId),
     getExecutionPlan(input.vaultId),
+    listAudioTestaments(input.vaultId),
     listAudit(input.vaultId),
   ]);
 
@@ -427,6 +526,7 @@ async function buildSnapshot(input: {
     documents,
     lookups,
     plan,
+    testaments,
     auditLines: audit.slice(0, 25).map(
       (a) =>
         `${new Date(a.createdAt).toLocaleString("en-KE")} — ${a.action}: ${a.detail}`,

@@ -16,6 +16,7 @@ import {
   listReviewRequests,
   recordBillingEvent,
 } from "@/lib/db/store";
+import { routeReviewToAdvocates } from "@/lib/advocate/route-review";
 
 const schema = z.object({
   packageTier: z.enum(["vault", "standard", "premium"]),
@@ -180,6 +181,18 @@ export async function POST(request: Request) {
       action: "amendment_resubmitted",
       detail: `${parsed.data.packageTier} / ${parsed.data.consultMode} · paid`,
     });
+  }
+
+  // Automated county routing. Never block the elder's submission on it — the
+  // case still lands in the open advocate queue if matching cannot run.
+  try {
+    await routeReviewToAdvocates({
+      reviewRequestId: review.id,
+      vaultId: access.vault.id,
+      actorUserId: access.session.userId,
+    });
+  } catch {
+    /* routing is best effort */
   }
 
   return NextResponse.json({
