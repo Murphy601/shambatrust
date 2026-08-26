@@ -1592,6 +1592,118 @@ export async function opsDecideSuccession(input: {
   return successionCase;
 }
 
+export type SuccessionReleaseGates = {
+  trusteeApproved: number;
+  trusteeRequired: number;
+  guardianApproved: number;
+  guardianRequired: number;
+  requiresCertificate: boolean;
+  hasCertificate: boolean;
+  requiresNotification: boolean;
+  hasNotification: boolean;
+  opsVerified: boolean;
+  coolingEndsAt: string | null;
+  coolingActive: boolean;
+  released: boolean;
+  /** Everything still standing between this claim and executor access. */
+  blockers: string[];
+  canRelease: boolean;
+};
+
+function evaluateReleaseGates(
+  db: Database,
+  successionCase: SuccessionCase,
+): SuccessionReleaseGates {
+  const plan = db.executionPlans.find(
+    (p) => p.vaultId === successionCase.vaultId,
+  );
+  const { trusteeRequired, guardianRequired } = successionThresholds(
+    db,
+    successionCase.vaultId,
+    successionCase.id,
+  );
+  const approvals = db.successionApprovals.filter(
+    (a) => a.caseId === successionCase.id,
+  );
+  const trusteeApproved = approvals.filter(
+    (a) => a.role === "trustee" && a.status === "approved",
+  ).length;
+  const guardianApproved = approvals.filter(
+    (a) => a.role === "guardian" && a.status === "approved",
+  ).length;
+
+  const requiresCertificate = plan?.requireDeathCertificate !== false;
+  const hasCertificate = Boolean(successionCase.deathCertificatePath);
+  const requiresNotification = Boolean(plan?.requireDeathNotification);
+  const hasNotification = Boolean(successionCase.deathNotificationPath);
+
+  const opsVerified =
+    successionCase.status === "succession_verified" ||
+    successionCase.status === "with_advocate" ||
+    successionCase.status === "succession_completed";
+  const coolingActive = Boolean(
+    successionCase.coolingEndsAt &&
+      new Date(successionCase.coolingEndsAt).getTime() > Date.now(),
+  );
+  const released = Boolean(successionCase.vaultReleasedAt);
+
+  const blockers: string[] = [];
+  if (!opsVerified) {
+    blockers.push("Ops have not verified this claim yet.");
+  }
+  if (coolingActive && successionCase.coolingEndsAt) {
+    blockers.push(
+      `Cooling period is active until ${new Date(successionCase.coolingEndsAt).toLocaleString()}.`,
+    );
+  }
+  if (requiresCertificate && !hasCertificate) {
+    blockers.push("Death certificate is missing on this claim.");
+  }
+  if (requiresNotification && !hasNotification) {
+    blockers.push("Official death notification is missing on this claim.");
+  }
+  if (trusteeApproved < trusteeRequired) {
+    blockers.push(
+      `Trustee approvals incomplete (${trusteeApproved}/${trusteeRequired}).`,
+    );
+  }
+  if (guardianApproved < guardianRequired) {
+    blockers.push(
+      `Guardian confirmations incomplete (${guardianApproved}/${guardianRequired}).`,
+    );
+  }
+
+  return {
+    trusteeApproved,
+    trusteeRequired,
+    guardianApproved,
+    guardianRequired,
+    requiresCertificate,
+    hasCertificate,
+    requiresNotification,
+    hasNotification,
+    opsVerified,
+    coolingEndsAt: successionCase.coolingEndsAt,
+    coolingActive,
+    released,
+    blockers,
+    canRelease: !released && blockers.length === 0,
+  };
+}
+
+/**
+ * Server-evaluated release gates. The UI renders these rather than recomputing
+ * the rules (and a wall clock) in the browser.
+ */
+export async function getSuccessionReleaseGates(
+  caseId: string,
+): Promise<SuccessionReleaseGates | null> {
+  const db = await readDb();
+  const successionCase = db.successionCases.find((c) => c.id === caseId);
+  if (!successionCase) return null;
+  return evaluateReleaseGates(db, successionCase);
+}
+
 /**
  * Final gate of the Dead Man's Switch: ops hand the sealed vault to the
  * executors. Only reachable after ops verification, after the cooling period,
@@ -1607,58 +1719,9 @@ export async function releaseSuccessionVault(input: {
   if (!successionCase) throw new Error("Succession case not found.");
   if (successionCase.vaultReleasedAt) return successionCase;
 
-  if (
-    successionCase.status !== "succession_verified" &&
-    successionCase.status !== "with_advocate" &&
-    successionCase.status !== "succession_completed"
-  ) {
-    throw new Error(
-      "Vault access can only be released after ops verify the claim.",
-    );
-  }
-
-  if (
-    successionCase.coolingEndsAt &&
-    new Date(successionCase.coolingEndsAt).getTime() > Date.now()
-  ) {
-    throw new Error(
-      `Cooling period is still active until ${new Date(successionCase.coolingEndsAt).toLocaleString()}.`,
-    );
-  }
-
-  const plan = db.executionPlans.find(
-    (p) => p.vaultId === successionCase.vaultId,
-  );
-  if (plan?.requireDeathCertificate && !successionCase.deathCertificatePath) {
-    throw new Error("Death certificate is missing on this claim.");
-  }
-  if (plan?.requireDeathNotification && !successionCase.deathNotificationPath) {
-    throw new Error("Official death notification is missing on this claim.");
-  }
-
-  const { trusteeRequired, guardianRequired } = successionThresholds(
-    db,
-    successionCase.vaultId,
-    input.caseId,
-  );
-  const caseApprovals = db.successionApprovals.filter(
-    (a) => a.caseId === input.caseId,
-  );
-  const trusteeApproved = caseApprovals.filter(
-    (a) => a.role === "trustee" && a.status === "approved",
-  ).length;
-  const guardianApproved = caseApprovals.filter(
-    (a) => a.role === "guardian" && a.status === "approved",
-  ).length;
-  if (trusteeApproved < trusteeRequired) {
-    throw new Error(
-      `Trustee approvals incomplete (${trusteeApproved}/${trusteeRequired}).`,
-    );
-  }
-  if (guardianApproved < guardianRequired) {
-    throw new Error(
-      `Guardian confirmations incomplete (${guardianApproved}/${guardianRequired}).`,
-    );
+  const gates = evaluateReleaseGates(db, successionCase);
+  if (!gates.canRelease) {
+    throw new Error(gates.blockers[0] || "This claim cannot be released yet.");
   }
 
   const now = new Date().toISOString();
@@ -1669,6 +1732,30 @@ export async function releaseSuccessionVault(input: {
 
   await writeDb(db);
   return successionCase;
+}
+
+function canOpenReleased(
+  db: Database,
+  successionCase: SuccessionCase,
+  userId: string,
+  phone: string,
+): boolean {
+  if (!successionCase.vaultReleasedAt) return false;
+
+  const confirmed = db.successionApprovals.some(
+    (a) =>
+      a.caseId === successionCase.id &&
+      a.status === "approved" &&
+      (a.userId === userId || phonesEqual(a.trusteePhone, phone)),
+  );
+  if (confirmed) return true;
+
+  return db.beneficiaries.some(
+    (b) =>
+      b.vaultId === successionCase.vaultId &&
+      Boolean(b.phone) &&
+      phonesEqual(b.phone, phone),
+  );
 }
 
 /**
@@ -1683,22 +1770,30 @@ export async function userCanOpenReleasedVault(input: {
 }): Promise<boolean> {
   const db = await readDb();
   const successionCase = db.successionCases.find((c) => c.id === input.caseId);
-  if (!successionCase?.vaultReleasedAt) return false;
+  if (!successionCase) return false;
+  return canOpenReleased(db, successionCase, input.userId, input.phone);
+}
 
-  const confirmed = db.successionApprovals.some(
-    (a) =>
-      a.caseId === input.caseId &&
-      a.status === "approved" &&
-      (a.userId === input.userId || phonesEqual(a.trusteePhone, input.phone)),
-  );
-  if (confirmed) return true;
-
-  return db.beneficiaries.some(
-    (b) =>
-      b.vaultId === successionCase.vaultId &&
-      Boolean(b.phone) &&
-      phonesEqual(b.phone, input.phone),
-  );
+export async function listReleasedCasesForUser(input: {
+  userId: string;
+  phone: string;
+}): Promise<Array<{ caseId: string; vaultId: string; ownerName: string }>> {
+  const db = await readDb();
+  return db.successionCases
+    .filter((successionCase) =>
+      canOpenReleased(db, successionCase, input.userId, input.phone),
+    )
+    .map((successionCase) => {
+      const vault = db.vaults.find((v) => v.id === successionCase.vaultId);
+      const owner = vault
+        ? db.users.find((u) => u.id === vault.ownerId)
+        : undefined;
+      return {
+        caseId: successionCase.id,
+        vaultId: successionCase.vaultId,
+        ownerName: owner?.fullName || "Elder",
+      };
+    });
 }
 
 export async function advocateClaimSuccession(input: {

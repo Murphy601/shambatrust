@@ -7,6 +7,7 @@ import {
   getSuccessionCase,
   getVaultById,
   listAgentLinks,
+  listReleasedCasesForUser,
   listReviewRequests,
   listSuccessionCasesForVault,
 } from "@/lib/db/store";
@@ -107,6 +108,16 @@ export async function resolveAudioTestamentAccess(
     ) {
       return { ok: true, testament };
     }
+  }
+
+  // Executors of a released vault — the whole point of the recording is that
+  // the family eventually hears it in the elder's own voice.
+  const releases = await listReleasedCasesForUser({
+    userId: session.userId,
+    phone: session.phone,
+  });
+  if (releases.some((release) => release.vaultId === vault.id)) {
+    return { ok: true, testament };
   }
 
   return {

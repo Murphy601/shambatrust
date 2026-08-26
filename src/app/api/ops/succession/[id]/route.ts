@@ -6,20 +6,29 @@ import {
   findUserById,
   getExecutionPlan,
   getSuccessionCase,
+  getSuccessionReleaseGates,
   getVaultById,
   listAllocations,
   listApprovalsForCase,
   listAssets,
   listBeneficiaries,
+  listAudioTestaments,
   listLegalDocuments,
   opsDecideSuccession,
+  releaseSuccessionVault,
 } from "@/lib/db/store";
+import { spokenLanguageLabel } from "@/lib/languages";
 
 type Params = { params: Promise<{ id: string }> };
 
 const decideSchema = z.object({
   decision: z.enum(["approve", "reject"]),
   opsNotes: z.string().optional().default(""),
+});
+
+const releaseSchema = z.object({
+  action: z.literal("release_vault"),
+  releaseNotes: z.string().max(2000).optional().default(""),
 });
 
 export async function GET(_request: Request, { params }: Params) {
@@ -35,17 +44,29 @@ export async function GET(_request: Request, { params }: Params) {
   }
 
   const vault = await getVaultById(successionCase.vaultId);
-  const [owner, filer, approvals, plan, assets, beneficiaries, allocations, documents] =
-    await Promise.all([
-      vault ? findUserById(vault.ownerId) : null,
-      findUserById(successionCase.filedByUserId),
-      listApprovalsForCase(id),
-      getExecutionPlan(successionCase.vaultId),
-      listAssets(successionCase.vaultId),
-      listBeneficiaries(successionCase.vaultId),
-      listAllocations(successionCase.vaultId),
-      listLegalDocuments(successionCase.vaultId),
-    ]);
+  const [
+    owner,
+    filer,
+    approvals,
+    plan,
+    assets,
+    beneficiaries,
+    allocations,
+    documents,
+    testaments,
+    gates,
+  ] = await Promise.all([
+    vault ? findUserById(vault.ownerId) : null,
+    findUserById(successionCase.filedByUserId),
+    listApprovalsForCase(id),
+    getExecutionPlan(successionCase.vaultId),
+    listAssets(successionCase.vaultId),
+    listBeneficiaries(successionCase.vaultId),
+    listAllocations(successionCase.vaultId),
+    listLegalDocuments(successionCase.vaultId),
+    listAudioTestaments(successionCase.vaultId),
+    getSuccessionReleaseGates(id),
+  ]);
 
   await addAudit({
     vaultId: successionCase.vaultId,
@@ -77,6 +98,15 @@ export async function GET(_request: Request, { params }: Params) {
       documentPath: null,
       hasFile: Boolean(d.documentPath),
     })),
+    testaments: testaments.map((t) => ({
+      id: t.id,
+      title: t.title,
+      languageLabel: spokenLanguageLabel(t.language),
+      durationSeconds: t.durationSeconds,
+      transcript: t.transcript,
+      transcriptStatus: t.transcriptStatus,
+    })),
+    gates,
   });
 }
 
@@ -87,7 +117,36 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   const { id } = await params;
-  const parsed = decideSchema.safeParse(await request.json());
+  const body = await request.json().catch(() => ({}));
+
+  const release = releaseSchema.safeParse(body);
+  if (release.success) {
+    try {
+      const successionCase = await releaseSuccessionVault({
+        caseId: id,
+        adminUserId: access.session.userId,
+        releaseNotes: release.data.releaseNotes,
+      });
+
+      await addAudit({
+        vaultId: successionCase.vaultId,
+        actorUserId: access.session.userId,
+        action: "succession_vault_released",
+        detail: `Succession ${id} · vault access released to executors · ${
+          release.data.releaseNotes || "no notes"
+        }`,
+      });
+
+      return NextResponse.json({ case: successionCase });
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : "Release failed." },
+        { status: 400 },
+      );
+    }
+  }
+
+  const parsed = decideSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid decision." }, { status: 400 });
   }

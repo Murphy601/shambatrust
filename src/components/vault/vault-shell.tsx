@@ -14,6 +14,7 @@ const links = [
   { href: "/vault/review", key: "review" as const },
   { href: "/vault/execution", key: "execution" as const },
   { href: "/vault/succession", key: "succession" as const },
+  { href: "/vault/released", key: "released" as const },
 ];
 
 export function VaultShell({

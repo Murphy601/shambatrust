@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { normalizeKenyanPhone } from "@/lib/auth/phone";
+import { normalizeKenyanPhone, phonesEqual } from "@/lib/auth/phone";
 import { requireVaultAccess } from "@/lib/vault-access";
 import {
   addAudit,
   getExecutionPlan,
   saveExecutionPlan,
 } from "@/lib/db/store";
+import type { ExecutionGuardian, ExecutionTrustee } from "@/lib/db/types";
 
 const trusteeSchema = z.object({
   fullName: z.string().min(2),
@@ -14,10 +15,17 @@ const trusteeSchema = z.object({
   idNumber: z.string().optional().default(""),
 });
 
+const guardianSchema = trusteeSchema.extend({
+  relationship: z.string().optional().default(""),
+});
+
 const saveSchema = z.object({
   trustees: z.array(trusteeSchema).max(5),
   minTrusteeApprovals: z.number().int().min(1).max(5),
+  guardians: z.array(guardianSchema).max(5),
+  minGuardianApprovals: z.number().int().min(0).max(5),
   requireDeathCertificate: z.boolean(),
+  requireDeathNotification: z.boolean(),
   coolingHours: z.number().int().min(0).max(720),
 });
 
@@ -51,12 +59,18 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "Invalid execution plan." }, { status: 400 });
   }
 
-  const trustees = [];
+  const trustees: ExecutionTrustee[] = [];
   for (const t of parsed.data.trustees) {
     const phone = normalizeKenyanPhone(t.phone);
     if (!phone) {
       return NextResponse.json(
         { error: `Invalid trustee phone: ${t.phone}` },
+        { status: 400 },
+      );
+    }
+    if (trustees.some((existing) => phonesEqual(existing.phone, phone))) {
+      return NextResponse.json(
+        { error: `${t.fullName} is listed twice as a trustee.` },
         { status: 400 },
       );
     }
@@ -67,12 +81,51 @@ export async function PUT(request: Request) {
     });
   }
 
-  if (
-    trustees.length > 0 &&
-    parsed.data.minTrusteeApprovals > trustees.length
-  ) {
+  const guardians: ExecutionGuardian[] = [];
+  for (const g of parsed.data.guardians) {
+    const phone = normalizeKenyanPhone(g.phone);
+    if (!phone) {
+      return NextResponse.json(
+        { error: `Invalid guardian phone: ${g.phone}` },
+        { status: 400 },
+      );
+    }
+    // Two confirmations from the same handset would defeat the whole point.
+    if (guardians.some((existing) => phonesEqual(existing.phone, phone))) {
+      return NextResponse.json(
+        { error: `${g.fullName} is listed twice as a guardian.` },
+        { status: 400 },
+      );
+    }
+    guardians.push({
+      fullName: g.fullName.trim(),
+      phone,
+      idNumber: g.idNumber.trim(),
+      relationship: g.relationship.trim(),
+    });
+  }
+
+  if (trustees.length > 0 && parsed.data.minTrusteeApprovals > trustees.length) {
     return NextResponse.json(
       { error: "Approvals required cannot exceed number of trustees." },
+      { status: 400 },
+    );
+  }
+  if (parsed.data.minGuardianApprovals > guardians.length) {
+    return NextResponse.json(
+      {
+        error:
+          "Guardian confirmations required cannot exceed the number of guardians you named.",
+      },
+      { status: 400 },
+    );
+  }
+  if (guardians.length > 0 && parsed.data.minGuardianApprovals < 2) {
+    return NextResponse.json(
+      {
+        error:
+          "Guardian verification needs at least two confirmations. Set it to 2 or remove the guardians.",
+      },
       { status: 400 },
     );
   }
@@ -81,7 +134,10 @@ export async function PUT(request: Request) {
     vaultId: access.vault.id,
     trustees,
     minTrusteeApprovals: parsed.data.minTrusteeApprovals,
+    guardians,
+    minGuardianApprovals: parsed.data.minGuardianApprovals,
     requireDeathCertificate: parsed.data.requireDeathCertificate,
+    requireDeathNotification: parsed.data.requireDeathNotification,
     coolingHours: parsed.data.coolingHours,
     updatedByUserId: access.session.userId,
   });
@@ -90,7 +146,9 @@ export async function PUT(request: Request) {
     vaultId: access.vault.id,
     actorUserId: access.session.userId,
     action: "execution_plan_saved",
-    detail: `${trustees.length} trustees · need ${plan.minTrusteeApprovals} approvals`,
+    detail:
+      `${trustees.length} trustees · need ${plan.minTrusteeApprovals} approvals · ` +
+      `${guardians.length} guardians · need ${plan.minGuardianApprovals} confirmations`,
   });
 
   return NextResponse.json({ plan });
