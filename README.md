@@ -149,12 +149,14 @@ npm run deploy
 
 ### Cloudflare dashboard (Git)
 
-Connect this GitHub repo in **Workers & Pages**. In build settings:
+Connect this GitHub repo in **Workers & Pages**. The defaults work:
 
 | Setting | Value |
 | --- | --- |
-| Build command | `npx opennextjs-cloudflare build` |
-| Deploy command | `npx opennextjs-cloudflare deploy -- --keep-vars` |
+| Build command | `npm run build` (runs OpenNext, not only `next build`) |
+| Deploy command | `npx wrangler deploy` |
+
+If you override them, use `npx opennextjs-cloudflare build` then `npx opennextjs-cloudflare deploy -- --keep-vars`.
 
 Set these as both **build** and **runtime** variables/secrets (Workers Builds inlines `NEXT_PUBLIC_*` at build time):
 
