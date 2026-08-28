@@ -1,5 +1,6 @@
 import {
   applySkipIfNeeded,
+  cleanLocation,
   detectSwahili,
   looksLikeSkip,
   mergeIntakeDraft,
@@ -140,10 +141,12 @@ function fillFromCurrentQuestion(
   if (pending.field === "fullName" && utterance.trim() && !/\d{5,}/.test(utterance)) {
     return mergeIntakeDraft(next, { fullName: utterance.trim() });
   }
+  if (pending.field === "shambaLocation") {
+    return mergeIntakeDraft(next, { shambaLocation: cleanLocation(utterance) });
+  }
   if (
     pending.field === "spouseName" ||
     pending.field === "trusteeName" ||
-    pending.field === "shambaLocation" ||
     pending.field === "plotSize" ||
     pending.field === "saccoName" ||
     pending.field === "bankName" ||

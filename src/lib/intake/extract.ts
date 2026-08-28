@@ -41,6 +41,23 @@ export function detectSwahili(text: string): boolean {
   );
 }
 
+export function cleanLocation(text: string): string {
+  const county = extractCounty(text);
+  const withoutLr = text
+    .replace(LR_RE, " ")
+    .replace(LR_NAKED_RE, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const stripped = withoutLr
+    .replace(
+      /^(?:shamba\s+(?:langu|letu)\s+liko\s+|my\s+(?:shamba|land|plot)\s+(?:is\s+)?(?:in\s+)?)/i,
+      "",
+    )
+    .replace(/[.,;:]+$/g, "")
+    .trim();
+  return stripped || county || withoutLr || text.trim();
+}
+
 export function extractCounty(text: string): string {
   const lower = text.toLowerCase();
   for (const county of KENYA_COUNTIES) {
@@ -108,7 +125,7 @@ export function parseUtterance(
   const county = extractCounty(trimmed);
   if (county) {
     out.county = county;
-    if (!current.shambaLocation) out.shambaLocation = trimmed;
+    if (!current.shambaLocation) out.shambaLocation = cleanLocation(trimmed);
   }
 
   const nameIntro = trimmed.match(

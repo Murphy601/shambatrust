@@ -230,12 +230,23 @@ export async function commitIntakeDraft(input: {
           "land",
           draft.shambaLocation.trim() || draft.lrNumber.trim() || "Family shamba",
         );
+    const landTitle = [
+      existingLand?.title && !/shamba langu liko/i.test(existingLand.title)
+        ? existingLand.title
+        : "",
+      draft.county || county,
+      draft.lrNumber.trim(),
+    ]
+      .filter(Boolean)
+      .filter((part, i, arr) => arr.indexOf(part) === i)
+      .join(" ")
+      .trim() || "Family shamba";
     await saveAsset({
       ...base,
       id: existingLand?.id,
       vaultId: vault.id,
       type: "land",
-      title: base.title || draft.shambaLocation || "Family shamba",
+      title: landTitle,
       titleNumber: existingLand?.titleNumber || draft.lrNumber.trim(),
       county: existingLand?.county || county,
       landmark:
