@@ -42,12 +42,22 @@ export default function AdvocateCalendarPage() {
               {new Date(b.scheduledAt).toLocaleString()}
             </p>
             {b.notes && <p className="mt-2 text-ink">{b.notes}</p>}
-            <Link
-              href={`/advocate/cases/${b.reviewRequestId}`}
-              className="mt-3 inline-block font-semibold text-forest underline"
-            >
-              Open case
-            </Link>
+            {b.kind === "video_notarization" && (
+              <p className="mt-2 text-base text-ink">
+                Video notarization
+                {b.diasporaSignerName ? ` · ${b.diasporaSignerName}` : ""}
+              </p>
+            )}
+            {b.reviewRequestId ? (
+              <Link
+                href={`/advocate/cases/${b.reviewRequestId}`}
+                className="mt-3 inline-block font-semibold text-forest underline"
+              >
+                Open case
+              </Link>
+            ) : (
+              <p className="mt-3 text-sm text-muted">No linked review case.</p>
+            )}
           </li>
         ))}
         {bookings.length === 0 && !error && (

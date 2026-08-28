@@ -369,6 +369,20 @@ export default function ReviewPage() {
 
       <section className="rounded-[0.45rem] border-2 border-border bg-surface p-5 sm:p-7">
         <h2 className="text-2xl font-semibold text-forest-deep">
+          {sw ? "Malipo (KES / USD / GBP / EUR)" : "Pay advocate & estate fees"}
+        </h2>
+        <p className="mt-2 text-base text-muted">
+          {sw
+            ? "Lipa kwa M-Pesa (KES) au Stripe (USD, GBP, EUR) kwenye daraja la diaspora."
+            : "Pay KES via M-Pesa STK or USD/GBP/EUR via Stripe on the Diaspora bridge."}
+        </p>
+        <Link href="/vault/diaspora" className="mt-4 inline-block btn btn-brass">
+          {sw ? "Fungua malipo" : "Open multi-currency checkout"}
+        </Link>
+      </section>
+
+      <section className="rounded-[0.45rem] border-2 border-border bg-surface p-5 sm:p-7">
+        <h2 className="text-2xl font-semibold text-forest-deep">
           {sw ? "Maombi yaliyotumwa" : "Submitted requests"}
         </h2>
         {reviews.length === 0 ? (

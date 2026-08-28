@@ -297,8 +297,29 @@ export default async function VaultDashboardPage() {
           href="/vault/wishes"
           src="/landing/cta-family.png"
           alt="Family looking across ancestral land"
-          label="Burial wishes"
-          value="Optional funeral instructions"
+          label="First 30 Days"
+          value="Burial, SACCO & M-Pesa liquidity"
+        />
+        <PhotoCard
+          href="/vault/diaspora"
+          src="/landing/advocates.png"
+          alt="Advocates reviewing papers in Nairobi"
+          label="Diaspora bridge"
+          value="ArdhiSasa, video notary, USD/GBP/EUR"
+        />
+        <PhotoCard
+          href="/vault/governance"
+          src="/landing/family-trust.png"
+          alt="Family planning documents together"
+          label="Family governance"
+          value="Enforcer, co-sign, first-right buyout"
+        />
+        <PhotoCard
+          href="/vault/houses"
+          src="/landing/title-verify.png"
+          alt="Land title held under a family trust"
+          label="Houses (Section 40)"
+          value="Polygamous allocation & minor trusts"
         />
         <PhotoCard
           href="/vault/succession"

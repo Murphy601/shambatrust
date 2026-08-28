@@ -6,13 +6,16 @@ import { useLocale } from "@/components/locale-provider";
 import { vaultCopy } from "@/lib/vault-copy";
 
 const links = [
-  { href: "/vault", key: "vault" as const },
-  { href: "/vault/assets", key: "assets" as const },
-  { href: "/vault/heirs", key: "heirs" as const },
-  { href: "/vault/will", key: "will" as const },
-  { href: "/vault/trust", key: "trust" as const },
-  { href: "/vault/wishes", key: "wishes" as const },
-  { href: "/vault/testament", key: "testament" as const },
+          { href: "/vault", key: "vault" as const },
+          { href: "/vault/assets", key: "assets" as const },
+          { href: "/vault/heirs", key: "heirs" as const },
+          { href: "/vault/houses", key: "houses" as const },
+          { href: "/vault/will", key: "will" as const },
+          { href: "/vault/trust", key: "trust" as const },
+          { href: "/vault/wishes", key: "wishes" as const },
+          { href: "/vault/diaspora", key: "diaspora" as const },
+          { href: "/vault/governance", key: "governance" as const },
+          { href: "/vault/testament", key: "testament" as const },
   { href: "/vault/agent", key: "agent" as const },
   { href: "/vault/review", key: "review" as const },
   { href: "/vault/execution", key: "execution" as const },

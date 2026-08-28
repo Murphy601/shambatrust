@@ -40,10 +40,14 @@ type VaultDetail = {
     county?: string;
     address?: string;
     preferredLanguage?: string;
-    idOnFile?: boolean;
-    idFrontName?: string | null;
-    idBackName?: string | null;
-  } | null;
+                idOnFile?: boolean;
+                idFrontName?: string | null;
+                idBackName?: string | null;
+                isDiaspora?: boolean;
+                countryOfResidence?: string;
+                ardhiSasaId?: string;
+                passportNumber?: string;
+              } | null;
   assets: Array<Asset & { hasDocument: boolean }>;
   beneficiaries: Beneficiary[];
   allocations: Allocation[];
@@ -66,6 +70,20 @@ type VaultDetail = {
   latestBinder: BinderRow | null;
   audit: Array<{ id: string; action: string; detail: string; createdAt: string }>;
   viewReviewId: string | null;
+  houses?: Array<{
+    id: string;
+    houseLabel: string;
+    wifeName: string;
+    allocatedAssetIds: string[];
+  }>;
+  proposals?: Array<{ id: string; title: string; status: string; kind: string }>;
+  checkouts?: Array<{
+    id: string;
+    currency: string;
+    amount: number;
+    status: string;
+    provider: string;
+  }>;
 };
 
 export default function OpsVaultPage() {
@@ -167,6 +185,14 @@ export default function OpsVaultPage() {
         </p>
         {data.owner?.address ? (
           <p className="mt-1 text-sm text-[#9aa89c]">{data.owner.address}</p>
+        ) : null}
+        {data.owner?.isDiaspora || data.owner?.countryOfResidence ? (
+          <p className="mt-1 text-sm text-[#d4a574]">
+            Diaspora
+            {data.owner.countryOfResidence ? ` · ${data.owner.countryOfResidence}` : ""}
+            {data.owner.ardhiSasaId ? ` · ArdhiSasa ${data.owner.ardhiSasaId}` : ""}
+            {data.owner.passportNumber ? ` · passport ${data.owner.passportNumber}` : ""}
+          </p>
         ) : null}
       </div>
 
@@ -511,6 +537,9 @@ export default function OpsVaultPage() {
                     ? "Section 11 acknowledged"
                     : "Not yet acknowledged"}
                 </li>
+                {data.vault.willDraft.testamentaryTrustEnabled ? (
+                  <li className="text-[#86efac]">Testamentary trust for minors on</li>
+                ) : null}
               </ul>
             ) : (
               <p className="mt-2 text-[#9aa89c]">No will draft yet.</p>
@@ -527,6 +556,9 @@ export default function OpsVaultPage() {
                   <li className="whitespace-pre-wrap">
                     LR: {data.vault.trustDraft.titleNumbers}
                   </li>
+                ) : null}
+                {data.vault.trustDraft.enforcerName ? (
+                  <li>Enforcer: {data.vault.trustDraft.enforcerName}</li>
                 ) : null}
               </ul>
             ) : (
@@ -549,10 +581,62 @@ export default function OpsVaultPage() {
                     ? ` / ${data.vault.burialWishes.committeeLead2}`
                     : ""}
                 </li>
+                {data.vault.burialWishes.clanEldersToInvolve ? (
+                  <li>Clan elders: {data.vault.burialWishes.clanEldersToInvolve}</li>
+                ) : null}
+                {data.vault.burialWishes.mpesaNomineePhone ? (
+                  <li>M-Pesa nominee: {data.vault.burialWishes.mpesaNomineePhone}</li>
+                ) : null}
               </ul>
             ) : (
               <p className="mt-2 text-[#9aa89c]">No burial wishes yet.</p>
             )}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded border border-[#3d4a40] bg-[#121a16] p-5">
+        <h2 className="text-xl font-semibold">4b. Houses, consensus &amp; checkout</h2>
+        <div className="mt-3 grid gap-4 text-sm lg:grid-cols-3">
+          <div>
+            <p className="font-semibold text-[#d4a574]">Section 40 houses</p>
+            <ul className="mt-2 space-y-1 text-[#e8efe9]">
+              {(data.houses || []).map((h) => (
+                <li key={h.id}>
+                  {h.houseLabel}
+                  {h.wifeName ? ` · ${h.wifeName}` : ""}
+                </li>
+              ))}
+              {(data.houses || []).length === 0 && (
+                <li className="text-[#9aa89c]">No polygamous houses.</li>
+              )}
+            </ul>
+          </div>
+          <div>
+            <p className="font-semibold text-[#d4a574]">Consensus</p>
+            <ul className="mt-2 space-y-1 text-[#e8efe9]">
+              {(data.proposals || []).slice(0, 6).map((p) => (
+                <li key={p.id}>
+                  {p.kind.replace(/_/g, " ")} · {p.status}
+                </li>
+              ))}
+              {(data.proposals || []).length === 0 && (
+                <li className="text-[#9aa89c]">No co-sign proposals.</li>
+              )}
+            </ul>
+          </div>
+          <div>
+            <p className="font-semibold text-[#d4a574]">Checkouts</p>
+            <ul className="mt-2 space-y-1 text-[#e8efe9]">
+              {(data.checkouts || []).slice(0, 6).map((c) => (
+                <li key={c.id}>
+                  {c.currency} {c.amount} · {c.provider} · {c.status}
+                </li>
+              ))}
+              {(data.checkouts || []).length === 0 && (
+                <li className="text-[#9aa89c]">No diaspora checkouts.</li>
+              )}
+            </ul>
           </div>
         </div>
       </section>
@@ -588,6 +672,14 @@ export default function OpsVaultPage() {
                   </li>
                 ))}
               </ul>
+            </div>
+            <div>
+              <p className="font-semibold">Enforcer</p>
+              <p className="mt-1 text-[#9aa89c]">
+                {data.executionPlan.enforcer
+                  ? `${data.executionPlan.enforcer.fullName} · ${data.executionPlan.enforcer.phone || "—"}`
+                  : "Not appointed."}
+              </p>
             </div>
             <div>
               <p className="font-semibold">Guardians (dual verification)</p>

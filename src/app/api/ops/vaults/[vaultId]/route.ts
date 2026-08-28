@@ -11,7 +11,11 @@ import {
   listAudit,
   listAudioTestaments,
   listBeneficiaries,
+  listBuyoutOffers,
+  listConsensusProposals,
+  listHouseholdHouses,
   listLegalDocuments,
+  listPaymentCheckouts,
   listReviewRequests,
   listTitleLookups,
   listVaultBinders,
@@ -59,6 +63,12 @@ export async function GET(_request: Request, { params }: Params) {
     getExecutionPlan(vaultId),
     listAudioTestaments(vaultId),
   ]);
+  const [houses, proposals, buyouts, checkouts] = await Promise.all([
+    listHouseholdHouses(vaultId),
+    listConsensusProposals(vaultId),
+    listBuyoutOffers(vaultId),
+    listPaymentCheckouts(vaultId),
+  ]);
 
   await addAudit({
     vaultId,
@@ -85,6 +95,11 @@ export async function GET(_request: Request, { params }: Params) {
           idOnFile: Boolean(owner.idFrontPath || owner.idBackPath),
           idFrontName: owner.idFrontName,
           idBackName: owner.idBackName,
+          isDiaspora: owner.isDiaspora,
+          countryOfResidence: owner.countryOfResidence,
+          ardhiSasaId: owner.ardhiSasaId,
+          ecitizenId: owner.ecitizenId,
+          passportNumber: owner.passportNumber,
         }
       : null,
     assets: assets.map((a) => ({
@@ -144,5 +159,9 @@ export async function GET(_request: Request, { params }: Params) {
         }
       : null,
     viewReviewId: latestReview?.id || null,
+    houses,
+    proposals,
+    buyouts,
+    checkouts,
   });
 }

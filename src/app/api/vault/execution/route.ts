@@ -7,7 +7,7 @@ import {
   getExecutionPlan,
   saveExecutionPlan,
 } from "@/lib/db/store";
-import type { ExecutionGuardian, ExecutionTrustee } from "@/lib/db/types";
+import type { ExecutionEnforcer, ExecutionGuardian, ExecutionTrustee } from "@/lib/db/types";
 
 const trusteeSchema = z.object({
   fullName: z.string().min(2),
@@ -24,6 +24,16 @@ const saveSchema = z.object({
   minTrusteeApprovals: z.number().int().min(1).max(5),
   guardians: z.array(guardianSchema).max(5),
   minGuardianApprovals: z.number().int().min(0).max(5),
+  enforcer: z
+    .object({
+      fullName: z.string(),
+      phone: z.string(),
+      idNumber: z.string().optional().default(""),
+      organization: z.string().optional().default(""),
+    })
+    .nullable()
+    .optional(),
+  minCoSignApprovals: z.number().int().min(2).max(5).optional().default(2),
   requireDeathCertificate: z.boolean(),
   requireDeathNotification: z.boolean(),
   coolingHours: z.number().int().min(0).max(720),
@@ -130,12 +140,32 @@ export async function PUT(request: Request) {
     );
   }
 
+  let enforcer: ExecutionEnforcer | null = null;
+  const rawEnforcer = parsed.data.enforcer;
+  if (rawEnforcer && rawEnforcer.fullName.trim()) {
+    const phone = normalizeKenyanPhone(rawEnforcer.phone);
+    if (!phone) {
+      return NextResponse.json(
+        { error: "Enter a valid Kenyan phone for the Enforcer." },
+        { status: 400 },
+      );
+    }
+    enforcer = {
+      fullName: rawEnforcer.fullName.trim(),
+      phone,
+      idNumber: rawEnforcer.idNumber.trim(),
+      organization: rawEnforcer.organization.trim(),
+    };
+  }
+
   const plan = await saveExecutionPlan({
     vaultId: access.vault.id,
     trustees,
     minTrusteeApprovals: parsed.data.minTrusteeApprovals,
     guardians,
     minGuardianApprovals: parsed.data.minGuardianApprovals,
+    enforcer,
+    minCoSignApprovals: parsed.data.minCoSignApprovals || 2,
     requireDeathCertificate: parsed.data.requireDeathCertificate,
     requireDeathNotification: parsed.data.requireDeathNotification,
     coolingHours: parsed.data.coolingHours,
@@ -148,7 +178,8 @@ export async function PUT(request: Request) {
     action: "execution_plan_saved",
     detail:
       `${trustees.length} trustees · need ${plan.minTrusteeApprovals} approvals · ` +
-      `${guardians.length} guardians · need ${plan.minGuardianApprovals} confirmations`,
+      `${guardians.length} guardians · need ${plan.minGuardianApprovals} confirmations` +
+      (plan.enforcer ? ` · enforcer ${plan.enforcer.fullName}` : ""),
   });
 
   return NextResponse.json({ plan });

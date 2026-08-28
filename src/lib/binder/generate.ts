@@ -278,6 +278,10 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
         will.witnessAcknowledged ? "Acknowledged" : "Not yet acknowledged",
       );
       if (will.notes) line("Notes", will.notes);
+      if (will.testamentaryTrustEnabled) {
+        line("Testamentary trust", `Until age ${will.testamentaryTrustUntilAge || 18}`);
+        if (will.testamentaryTrustTerms) line("Trust terms", will.testamentaryTrustTerms);
+      }
     } else {
       doc.text("No will builder draft.");
     }
@@ -289,6 +293,7 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
       line("Trust name", trust.trustName);
       line("Primary trustee", trust.primaryTrustee);
       line("Co-trustee", trust.coTrustee);
+      if (trust.enforcerName) line("Enforcer", trust.enforcerName);
       line("Title numbers", trust.titleNumbers);
       if (trust.conditions) line("Conditions", trust.conditions);
     } else {
@@ -302,6 +307,10 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
       line("Location", wishes.burialLocation);
       line("Details", wishes.burialDetails);
       line("Committee", `${wishes.committeeLead1} / ${wishes.committeeLead2}`.trim());
+      if (wishes.burialPlotTitle) line("Burial plot", wishes.burialPlotTitle);
+      if (wishes.clanEldersToInvolve) line("Clan elders", wishes.clanEldersToInvolve);
+      if (wishes.mpesaNomineePhone) line("M-Pesa nominee", wishes.mpesaNomineePhone);
+      if (wishes.saccoNomineeName) line("SACCO nominee", wishes.saccoNomineeName);
       if (wishes.specialMessage) line("Message", wishes.specialMessage);
     } else {
       doc.text("No burial wishes recorded.");
@@ -337,6 +346,17 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
       for (const t of snapshot.plan.trustees || []) {
         doc.text(
           `• ${t.fullName} · ${t.phone || "—"}${t.idNumber ? ` · ID ${t.idNumber}` : ""}`,
+        );
+      }
+      if (snapshot.plan.enforcer) {
+        doc.moveDown(0.3);
+        doc.font(fonts.bold).text("Enforcer");
+        doc.font(fonts.regular);
+        doc.text(
+          `• ${snapshot.plan.enforcer.fullName} · ${snapshot.plan.enforcer.phone || "—"}` +
+            (snapshot.plan.enforcer.organization
+              ? ` · ${snapshot.plan.enforcer.organization}`
+              : ""),
         );
       }
       doc.moveDown(0.3);

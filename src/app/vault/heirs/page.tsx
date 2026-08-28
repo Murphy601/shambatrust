@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useLocale } from "@/components/locale-provider";
 import { formatPhoneDisplay } from "@/lib/auth/phone";
 import { vaultCopy } from "@/lib/vault-copy";
-import type { Allocation, Asset, Beneficiary } from "@/lib/db/types";
+import type { Allocation, Asset, Beneficiary, HouseholdHouse } from "@/lib/db/types";
 
 export default function HeirsPage() {
   const { locale } = useLocale();
@@ -21,6 +21,9 @@ export default function HeirsPage() {
   const [idNumber, setIdNumber] = useState("");
   const [phone, setPhone] = useState("");
   const [relationship, setRelationship] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [houseId, setHouseId] = useState("");
+  const [houses, setHouses] = useState<HouseholdHouse[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -37,6 +40,7 @@ export default function HeirsPage() {
     const alData = await alRes.json();
     if (bRes.ok) {
       setBeneficiaries(bData.beneficiaries);
+      setHouses(bData.houses || []);
       setLocked(Boolean(bData.locked));
       setAmendmentOpen(Boolean(bData.amendmentOpen));
     }
@@ -80,6 +84,8 @@ export default function HeirsPage() {
     setIdNumber("");
     setPhone("");
     setRelationship("");
+    setDateOfBirth("");
+    setHouseId("");
   }
 
   function startEdit(b: Beneficiary) {
@@ -88,6 +94,8 @@ export default function HeirsPage() {
     setIdNumber(b.idNumber);
     setPhone(b.phone);
     setRelationship(b.relationship);
+    setDateOfBirth(b.dateOfBirth || "");
+    setHouseId(b.houseId || "");
     setShowNextCtas(false);
     setError(null);
     setWarning(null);
@@ -106,6 +114,8 @@ export default function HeirsPage() {
       idNumber,
       phone,
       relationship,
+      dateOfBirth,
+      houseId: houseId || null,
     };
     const res = await fetch("/api/vault/beneficiaries", {
       method: editingId ? "PATCH" : "POST",
@@ -295,6 +305,48 @@ export default function HeirsPage() {
               placeholder={sw ? "mf. Mwana" : "e.g. Son / Daughter"}
             />
           </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="field-label" htmlFor="dob">
+                {sw ? "Tarehe ya kuzaliwa" : "Date of birth"}
+              </label>
+              <input
+                id="dob"
+                type="date"
+                className="field"
+                value={dateOfBirth}
+                onChange={(e) => setDateOfBirth(e.target.value)}
+              />
+              <p className="mt-1 text-sm text-muted">
+                {sw
+                  ? "Chini ya miaka 18: amana ya wosia huwekwa kiotomatiki."
+                  : "Under 18: a testamentary trust is injected into the will automatically."}
+              </p>
+            </div>
+            <div>
+              <label className="field-label" htmlFor="house">
+                {sw ? "Nyumba (Kifungu 40)" : "House (Section 40)"}
+              </label>
+              <select
+                id="house"
+                className="field"
+                value={houseId}
+                onChange={(e) => setHouseId(e.target.value)}
+              >
+                <option value="">{sw ? "— Hakuna —" : "— None —"}</option>
+                {houses.map((h) => (
+                  <option key={h.id} value={h.id}>
+                    {h.houseLabel}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-sm text-muted">
+                <Link href="/vault/houses" className="font-semibold text-forest underline">
+                  {sw ? "Simamia nyumba" : "Manage houses"}
+                </Link>
+              </p>
+            </div>
+          </div>
           <div className="flex flex-wrap gap-3">
             <button type="submit" className="btn btn-primary">
               {editingId ? t.save : t.addHeir}
@@ -347,9 +399,18 @@ export default function HeirsPage() {
                 <div>
                   <h3 className="text-2xl font-semibold text-forest-deep">
                     {b.fullName}
+                    {b.isMinor ? (
+                      <span className="ml-2 text-base font-semibold text-brass">
+                        {sw ? "mtoto" : "minor"}
+                      </span>
+                    ) : null}
                   </h3>
                   <p className="text-base text-muted">
                     {b.relationship}
+                    {b.dateOfBirth ? ` · ${b.dateOfBirth}` : ""}
+                    {b.houseId
+                      ? ` · ${houses.find((h) => h.id === b.houseId)?.houseLabel || "house"}`
+                      : ""}
                     {b.idNumber ? ` · ID ${b.idNumber}` : ""}
                     {b.phone ? ` · ${formatPhoneDisplay(b.phone)}` : ""}
                   </p>

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdminAccess } from "@/lib/secure-docs/access";
-import { listBillingRecords, setBillingPaid } from "@/lib/db/store";
+import { listBillingRecords, listAllPaymentCheckouts, setBillingPaid } from "@/lib/db/store";
 import { seatCan, getOpsSeatRole } from "@/lib/ops/seats";
 
 export async function GET() {
@@ -10,8 +10,10 @@ export async function GET() {
     return NextResponse.json({ error: access.error }, { status: access.status });
   }
   const records = await listBillingRecords();
+  const checkouts = await listAllPaymentCheckouts();
   return NextResponse.json({
     records,
+    checkouts,
     seat: getOpsSeatRole(access.session.phone),
   });
 }

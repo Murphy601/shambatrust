@@ -23,6 +23,9 @@ export default function WillBuilderPage() {
   const [altGuardianName, setAltGuardianName] = useState("");
   const [witnessAcknowledged, setWitnessAcknowledged] = useState(false);
   const [notes, setNotes] = useState("");
+  const [testamentaryTrustEnabled, setTestamentaryTrustEnabled] = useState(false);
+  const [testamentaryTrustTerms, setTestamentaryTrustTerms] = useState("");
+  const [minors, setMinors] = useState<Array<{ fullName: string; dateOfBirth: string }>>([]);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -32,19 +35,23 @@ export default function WillBuilderPage() {
       const res = await fetch("/api/vault/will");
       const json = await res.json();
       const d = json.draft;
-      if (!d) return;
-      setTestatorName(d.testatorName || "");
-      setTestatorId(d.testatorId || "");
-      setPrimaryResidence(d.primaryResidence || "");
-      setExecutorName(d.executorName || "");
-      setExecutorPhone(d.executorPhone || "");
-      setAltExecutorName(d.altExecutorName || "");
-      setAltExecutorPhone(d.altExecutorPhone || "");
-      setGuardianName(d.guardianName || "");
-      setGuardianPhone(d.guardianPhone || "");
-      setAltGuardianName(d.altGuardianName || "");
-      setWitnessAcknowledged(Boolean(d.witnessAcknowledged));
-      setNotes(d.notes || "");
+      if (d) {
+        setTestatorName(d.testatorName || "");
+        setTestatorId(d.testatorId || "");
+        setPrimaryResidence(d.primaryResidence || "");
+        setExecutorName(d.executorName || "");
+        setExecutorPhone(d.executorPhone || "");
+        setAltExecutorName(d.altExecutorName || "");
+        setAltExecutorPhone(d.altExecutorPhone || "");
+        setGuardianName(d.guardianName || "");
+        setGuardianPhone(d.guardianPhone || "");
+        setAltGuardianName(d.altGuardianName || "");
+        setWitnessAcknowledged(Boolean(d.witnessAcknowledged));
+        setNotes(d.notes || "");
+        setTestamentaryTrustEnabled(Boolean(d.testamentaryTrustEnabled));
+        setTestamentaryTrustTerms(d.testamentaryTrustTerms || "");
+      }
+      if (Array.isArray(json.minors)) setMinors(json.minors);
     })();
   }, []);
 
@@ -70,6 +77,8 @@ export default function WillBuilderPage() {
           altGuardianName,
           witnessAcknowledged,
           notes,
+          testamentaryTrustEnabled,
+          testamentaryTrustTerms,
         }),
       });
       const json = await res.json();
@@ -161,6 +170,30 @@ export default function WillBuilderPage() {
             </label>
             <label className="field-label" htmlFor="n">{sw ? "Maelezo kwa wakili" : "Notes for the advocate"}</label>
             <textarea id="n" className="field min-h-[6rem]" value={notes} onChange={(e) => setNotes(e.target.value)} />
+            {(testamentaryTrustEnabled || minors.length > 0) && (
+              <div className="rounded-[0.35rem] border-2 border-brass p-4">
+                <p className="font-semibold text-forest-deep">
+                  {sw ? "Amana ya wosia kwa watoto" : "Testamentary trust for minors"}
+                </p>
+                <p className="mt-1 text-base text-muted">
+                  {minors.length
+                    ? (sw
+                        ? `Warithi chini ya 18: ${minors.map((m) => m.fullName).join(", ")}.`
+                        : `Beneficiaries under 18: ${minors.map((m) => m.fullName).join(", ")}.`)
+                    : sw
+                      ? "Imewashwa kwenye rasimu."
+                      : "Enabled on this draft."}
+                </p>
+                <textarea
+                  className="field mt-3 min-h-[8rem]"
+                  value={testamentaryTrustTerms}
+                  onChange={(e) => {
+                    setTestamentaryTrustTerms(e.target.value);
+                    setTestamentaryTrustEnabled(true);
+                  }}
+                />
+              </div>
+            )}
           </>
         )}
         {error && <p className="text-[var(--danger)]">{error}</p>}

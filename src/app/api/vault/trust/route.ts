@@ -9,6 +9,11 @@ const schema = z.object({
   coTrustee: z.string().default(""),
   titleNumbers: z.string().default(""),
   conditions: z.string().default(""),
+  enforcerName: z.string().default(""),
+  enforcerPhone: z.string().default(""),
+  enforcerIdNumber: z.string().default(""),
+  enforcerOrganization: z.string().default(""),
+  minCoSignApprovals: z.number().int().min(2).max(5).default(2),
 });
 
 export async function GET() {
