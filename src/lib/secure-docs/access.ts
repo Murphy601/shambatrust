@@ -58,7 +58,8 @@ export type SecureDocTarget =
   | { kind: "asset_admin"; assetId: string; vaultId: string }
   | { kind: "death_cert"; caseId: string }
   | { kind: "death_notification"; caseId: string }
-  | { kind: "title_search"; lookupId: string };
+  | { kind: "title_search"; lookupId: string }
+  | { kind: "title_consent"; lookupId: string };
 
 /**
  * Who may play back a voice testament: the vault owner, their active family
@@ -142,13 +143,17 @@ export async function resolveSecureDocAccess(
     }
   | { ok: false; status: number; error: string }
 > {
-  if (target.kind === "title_search") {
+  if (target.kind === "title_search" || target.kind === "title_consent") {
     const lookup = await getTitleLookup(target.lookupId);
-    if (!lookup?.documentPath) {
+    const isConsent = target.kind === "title_consent";
+    const filename = isConsent ? lookup?.authorizationPath : lookup?.documentPath;
+    if (!lookup || !filename) {
       return {
         ok: false,
         status: 404,
-        error: "Official ArdhiSasa certificate not on file.",
+        error: isConsent
+          ? "Signed authorization not on file."
+          : "Official ArdhiSasa certificate not on file.",
       };
     }
     const vault = await getVaultById(lookup.vaultId);
@@ -172,14 +177,18 @@ export async function resolveSecureDocAccess(
       return {
         ok: false,
         status: 403,
-        error: "Not authorised to view this ArdhiSasa certificate.",
+        error: isConsent
+          ? "Not authorised to view this authorization."
+          : "Not authorised to view this ArdhiSasa certificate.",
       };
     }
     return {
       ok: true,
       vaultId: lookup.vaultId,
-      filename: lookup.documentPath,
-      displayName: lookup.documentName || `ArdhiSasa search · ${lookup.titleNumber}`,
+      filename,
+      displayName: isConsent
+        ? lookup.authorizationName || `Land search consent · ${lookup.titleNumber}`
+        : lookup.documentName || `ArdhiSasa search · ${lookup.titleNumber}`,
       watermarkLabel: `${session.fullName || session.role} · view-only`,
     };
   }

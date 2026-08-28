@@ -164,7 +164,24 @@ export async function listOpsDocumentIndex(query = ""): Promise<{
       }
 
       for (const lookup of lookups) {
-        searchHay += ` ${lookup.titleNumber} ${lookup.parcelNumber} ${lookup.documentName || ""}`;
+        searchHay += ` ${lookup.titleNumber} ${lookup.parcelNumber} ${lookup.documentName || ""} ${lookup.authorizationName || ""}`;
+        if (lookup.authorizationPath) {
+          fileCount += 1;
+          pending.push({
+            key: `title_consent:${lookup.id}`,
+            elderId: user.id,
+            elderName: user.fullName,
+            phone: user.phone,
+            vaultId: vault.id,
+            title: lookup.authorizationName || `Land search consent · ${lookup.titleNumber || lookup.parcelNumber}`,
+            type: "Land search authorization",
+            source: "Elder paper consent",
+            uploadedAt: lookup.authorizationSignedAt || lookup.updatedAt || lookup.createdAt,
+            status: "On file",
+            viewUrl: `/api/secure-docs/view?kind=title_consent&lookupId=${lookup.id}`,
+            downloadUrl: `/api/secure-docs/view?kind=title_consent&lookupId=${lookup.id}`,
+          });
+        }
         if (!lookup.documentPath) continue;
         fileCount += 1;
         pending.push({

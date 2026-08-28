@@ -9,6 +9,7 @@ import {
   listConsultBookingsForVault,
   listPaymentCheckouts,
   listTitleLookups,
+  listBeneficiaries,
   updateUserDiasporaProfile,
 } from "@/lib/db/store";
 
@@ -28,12 +29,13 @@ export async function GET() {
     return NextResponse.json({ error: access.error }, { status: access.status });
   }
   const owner = await findUserById(access.vault.ownerId);
-  const [advocates, bookings, checkouts, lookups, assets] = await Promise.all([
+  const [advocates, bookings, checkouts, lookups, assets, heirs] = await Promise.all([
     listActiveAdvocates(),
     listConsultBookingsForVault(access.vault.id),
     listPaymentCheckouts(access.vault.id),
     listTitleLookups(access.vault.id),
     listAssets(access.vault.id),
+    listBeneficiaries(access.vault.id),
   ]);
   return NextResponse.json({
     asAgent: access.asAgent,
@@ -60,6 +62,12 @@ export async function GET() {
     checkouts,
     lookups,
     assets,
+    heirs: heirs.map((h) => ({
+      id: h.id,
+      fullName: h.fullName,
+      phone: h.phone,
+      relationship: h.relationship,
+    })),
   });
 }
 

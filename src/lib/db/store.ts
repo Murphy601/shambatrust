@@ -329,6 +329,14 @@ function normalizeDb(parsed: Partial<Database>): Database {
     registrationSection: t.registrationSection ?? "",
     landRegistryOffice: t.landRegistryOffice ?? "",
     advocateNotes: t.advocateNotes ?? "",
+    consentPath: t.consentPath === "family_assisted" ? "family_assisted" : "paper_authorization",
+    consentHelperBeneficiaryId: t.consentHelperBeneficiaryId ?? null,
+    consentHelperName: t.consentHelperName ?? "",
+    consentHelperPhone: t.consentHelperPhone ?? "",
+    authorizationName: t.authorizationName ?? null,
+    authorizationPath: t.authorizationPath ?? null,
+    authorizationSignedAt: t.authorizationSignedAt ?? null,
+    familyAlertSentAt: t.familyAlertSentAt ?? null,
     documentName: t.documentName ?? null,
     documentPath: t.documentPath ?? null,
     filedAt: t.filedAt ?? null,
@@ -1329,6 +1337,10 @@ export async function saveTitleLookup(input: {
   registrationSection?: string;
   landRegistryOffice?: string;
   advocateNotes?: string;
+  consentPath?: TitleLookupRecord["consentPath"];
+  consentHelperBeneficiaryId?: string | null;
+  consentHelperName?: string;
+  consentHelperPhone?: string;
 }): Promise<TitleLookupRecord> {
   const db = await readDb();
   const costKes = input.costKes ?? amountForBillingEvent("title_lookup");
@@ -1350,6 +1362,14 @@ export async function saveTitleLookup(input: {
     ardhiSasaId: input.ardhiSasaId || "",
     ecitizenId: input.ecitizenId || "",
     status: "pending_advocate_submission",
+    consentPath: input.consentPath === "family_assisted" ? "family_assisted" : "paper_authorization",
+    consentHelperBeneficiaryId: input.consentHelperBeneficiaryId ?? null,
+    consentHelperName: input.consentHelperName || "",
+    consentHelperPhone: input.consentHelperPhone || "",
+    authorizationName: null,
+    authorizationPath: null,
+    authorizationSignedAt: null,
+    familyAlertSentAt: null,
     advocateNotes: input.advocateNotes || "",
     documentName: null,
     documentPath: null,
@@ -1392,6 +1412,13 @@ export async function updateTitleLookup(input: {
   documentName?: string | null;
   documentPath?: string | null;
   reviewRequestId?: string | null;
+  consentPath?: TitleLookupRecord["consentPath"];
+  consentHelperBeneficiaryId?: string | null;
+  consentHelperName?: string;
+  consentHelperPhone?: string;
+  authorizationName?: string | null;
+  authorizationPath?: string | null;
+  familyAlertSentAt?: string | null;
 }): Promise<TitleLookupRecord | null> {
   const db = await readDb();
   const row = db.titleLookups.find((t) => t.id === input.id);
@@ -1404,6 +1431,24 @@ export async function updateTitleLookup(input: {
   }
   if (input.documentName !== undefined) row.documentName = input.documentName;
   if (input.documentPath !== undefined) row.documentPath = input.documentPath;
+  if (input.consentPath) row.consentPath = input.consentPath;
+  if (input.consentHelperBeneficiaryId !== undefined) {
+    row.consentHelperBeneficiaryId = input.consentHelperBeneficiaryId;
+  }
+  if (typeof input.consentHelperName === "string") {
+    row.consentHelperName = input.consentHelperName;
+  }
+  if (typeof input.consentHelperPhone === "string") {
+    row.consentHelperPhone = input.consentHelperPhone;
+  }
+  if (input.authorizationName !== undefined) row.authorizationName = input.authorizationName;
+  if (input.authorizationPath !== undefined) {
+    row.authorizationPath = input.authorizationPath;
+    if (input.authorizationPath) row.authorizationSignedAt = now;
+  }
+  if (input.familyAlertSentAt !== undefined) {
+    row.familyAlertSentAt = input.familyAlertSentAt;
+  }
   if (input.status === "awaiting_owner_consent" && !row.filedAt) {
     row.filedAt = now;
     row.result = {
@@ -1411,7 +1456,9 @@ export async function updateTitleLookup(input: {
       simulated: false,
       registrationStatus: "awaiting_owner_consent",
       rawNote:
-        "Advocate filed this search on their ArdhiSasa professional account. Waiting for the registered owner's OTP consent.",
+        row.consentPath === "family_assisted"
+          ? "Search filed on ArdhiSasa. Waiting for the owner (or a family helper) to Approve the notification in the ArdhiSasa portal."
+          : "Search filed on ArdhiSasa. Paper authorization is on file (or will be uploaded) so the advocate can complete the search.",
       checkedAt: now,
     };
   }
@@ -1422,9 +1469,8 @@ export async function updateTitleLookup(input: {
       ...row.result,
       simulated: false,
       found: true,
-      registrationStatus: "certificate_on_file",
-      rawNote:
-        "Official ArdhiSasa search certificate uploaded to the vault.",
+      registrationStatus: "officially_verified",
+      rawNote: "Officially Verified by LSK Advocate. Search certificate stored in the vault.",
       checkedAt: now,
     };
   }

@@ -4,7 +4,8 @@ import {
   listBeneficiaries,
   queueOutboundNotice,
 } from "@/lib/db/store";
-import { buildWhatsAppUrl } from "@/lib/whatsapp";
+import { familyAssistMessage } from "@/lib/land-registry/verification";
+import { buildPeerWhatsAppUrl, buildWhatsAppUrl } from "@/lib/whatsapp";
 
 async function trySms(toPhone: string, body: string): Promise<string | null> {
   const apiKey = process.env.AFRICAS_TALKING_API_KEY;
@@ -73,4 +74,37 @@ export async function notifyVaultStatus(input: {
 
 export function noticeWhatsAppUrl(body: string): string {
   return buildWhatsAppUrl(body);
+}
+
+export async function notifyFamilyArdhiSasaAssist(input: {
+  vaultId: string;
+  toPhone: string;
+  elderName: string;
+  locale?: "en" | "sw";
+}): Promise<{ body: string; whatsappUrl: string; smsQueued: boolean }> {
+  const body = familyAssistMessage(input.elderName, input.locale || "en");
+  const smsError = await trySms(input.toPhone, body);
+  await queueOutboundNotice({
+    vaultId: input.vaultId,
+    channel: "sms",
+    toPhone: input.toPhone,
+    body,
+    relatedAction: "ardhisasa_family_assist",
+    status: smsError ? "queued" : "sent",
+    error: smsError,
+  });
+  await queueOutboundNotice({
+    vaultId: input.vaultId,
+    channel: "whatsapp",
+    toPhone: input.toPhone,
+    body,
+    relatedAction: "ardhisasa_family_assist",
+    status: "queued",
+    error: null,
+  });
+  return {
+    body,
+    whatsappUrl: buildPeerWhatsAppUrl(input.toPhone, body),
+    smsQueued: Boolean(smsError),
+  };
 }

@@ -45,7 +45,7 @@ export function VaultShell({
 
   return (
     <div className="min-h-screen bg-[#F8F9FA]">
-      <header className="border-b border-[#0B1D3A] bg-[#0B1D3A] text-white">
+      <header className="border-b border-[#0B1D3A] bg-[#0B1D3A] text-white print:hidden">
         <div className="section flex flex-wrap items-center justify-between gap-3 py-4">
           <div>
             <Link

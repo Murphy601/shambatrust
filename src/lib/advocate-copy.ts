@@ -45,8 +45,8 @@ const copy = {
     titleLookup: "ArdhiSasa professional filing",
     runLookup: "Open filing for LSK advocate",
     lookupHint:
-      "Log into your official professional account, file the search, wait for the registered owner's OTP consent, then upload the official digital search PDF into this vault.",
-    markFiled: "Mark filed — awaiting owner OTP consent",
+      "Log into your official professional account, file the search, then complete owner authorization — either the signed one-page form in this vault, or the family helper approving the ArdhiSasa Notifications request. Upload the official search PDF when it is ready.",
+    markFiled: "Mark filed — waiting for owner consent",
     uploadCert: "Upload official search PDF",
     withdrawFiling: "Withdraw filing",
     eSign: "E-sign & certify",
@@ -111,8 +111,8 @@ const copy = {
     titleLookup: "Uwasilishaji wa kitaalamu wa ArdhiSasa",
     runLookup: "Fungua ombi kwa wakili wa LSK",
     lookupHint:
-      "Ingia kwenye akaunti yako rasmi ya kitaalamu, wasilisha utafutaji, subiri OTP ya mmiliki, kisha pakia PDF rasmi kwenye hifadhi hii.",
-    markFiled: "Weka kuwa imewasilishwa — inasubiri OTP ya mmiliki",
+      "Ingia kwenye akaunti yako rasmi ya kitaalamu, wasilisha utafutaji, kisha kamilisha idhini ya mmiliki — fomu ya karatasi iliyosainiwa kwenye hifadhi hii, au mwanafamilia kuidhinisha ombi katika Arifa za ArdhiSasa. Pakia PDF rasmi ikipatikana.",
+    markFiled: "Weka kuwa imewasilishwa — inasubiri idhini ya mmiliki",
     uploadCert: "Pakia PDF rasmi ya utafutaji",
     withdrawFiling: "Ondoa ombi",
     eSign: "Saini kidijitali & thibitisha",

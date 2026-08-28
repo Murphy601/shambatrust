@@ -432,9 +432,19 @@ export default async function VaultDashboardPage() {
         </h2>
         {lookups.length === 0 ? (
           <p className="mt-3 text-lg text-muted">
-            Ministry of Lands searches are filed by your LSK partner advocate.
-            Status starts as Pending Advocate Submission. Official PDFs appear
-            here after owner OTP consent on ArdhiSasa.
+            Your LSK advocate files the Ministry search. Consent is a one-page
+            signed form or a child helping Approve the request in ArdhiSasa
+            Notifications — not an SMS code. Status starts as Pending
+            Verification.
+            {" "}
+            <Link href="/vault/title-consent" className="font-semibold text-forest underline">
+              Print the one-page consent form
+            </Link>
+            {" or "}
+            <Link href="/vault/diaspora" className="font-semibold text-forest underline">
+              send steps to a child
+            </Link>
+            .
           </p>
         ) : (
           <ul className="mt-4 space-y-3">

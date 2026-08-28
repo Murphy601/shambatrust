@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import { PlatformDisclaimer } from "@/components/platform-disclaimer";
 import { useLocale } from "@/components/locale-provider";
@@ -9,6 +10,7 @@ import {
   ARDHISASA_NOTICE_EN,
   ARDHISASA_NOTICE_SW,
   ardhisasaStatusLabel,
+  consentPathLabel,
   lookupParcelSummary,
 } from "@/lib/land-registry/verification";
 import type {
@@ -25,6 +27,13 @@ type AdvocateOpt = {
   fullName: string;
   county: string;
   advocateLicense: string | null;
+};
+
+type HeirOpt = {
+  id: string;
+  fullName: string;
+  phone: string;
+  relationship: string;
 };
 
 export default function DiasporaBridgePage() {
@@ -54,6 +63,12 @@ export default function DiasporaBridgePage() {
   const [landRegistryOffice, setLandRegistryOffice] = useState("");
   const [lookupAssetId, setLookupAssetId] = useState("");
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [heirs, setHeirs] = useState<HeirOpt[]>([]);
+  const [consentPath, setConsentPath] = useState<"paper_authorization" | "family_assisted">(
+    "paper_authorization",
+  );
+  const [helperId, setHelperId] = useState("");
+  const [consentFile, setConsentFile] = useState<File | null>(null);
   const [currency, setCurrency] = useState<CheckoutCurrency>("USD");
   const [kind, setKind] = useState<CheckoutKind>("advocate_fee");
   const [amount, setAmount] = useState("");
@@ -84,6 +99,8 @@ export default function DiasporaBridgePage() {
     setCheckouts(json.checkouts || []);
     setLookups(json.lookups || []);
     setAssets(json.assets || []);
+    setHeirs(json.heirs || []);
+    if (!helperId && json.heirs?.[0]) setHelperId(json.heirs[0].id);
     if (!advocateId && json.advocates?.[0]) setAdvocateId(json.advocates[0].id);
   }
 
@@ -170,6 +187,8 @@ export default function DiasporaBridgePage() {
         blockNumber,
         registrationSection,
         landRegistryOffice,
+        consentPath,
+        consentHelperBeneficiaryId: helperId || null,
       }),
     });
     const json = await res.json();
@@ -179,9 +198,58 @@ export default function DiasporaBridgePage() {
     }
     setMessage(
       sw
-        ? "Ombi limehifadhiwa: Inasubiri uwasilishaji wa wakili."
-        : "Request saved: Pending Advocate Submission.",
+        ? "Ombi limehifadhiwa: Inasubiri uthibitisho."
+        : "Request saved: Pending Verification.",
     );
+    await load();
+  }
+
+  async function uploadPaperConsent(lookupId: string) {
+    if (!consentFile) {
+      setError(sw ? "Piga picha ya fomu iliyosainiwa." : "Photograph the signed form first.");
+      return;
+    }
+    setError(null);
+    setMessage(null);
+    const form = new FormData();
+    form.set("lookupId", lookupId);
+    form.set("file", consentFile);
+    const res = await fetch("/api/vault/title-consent", { method: "POST", body: form });
+    const json = await res.json();
+    if (!res.ok) {
+      setError(json.error || "Could not upload form");
+      return;
+    }
+    setConsentFile(null);
+    setMessage(sw ? "Fomu iliyosainiwa imewekwa kwenye hifadhi." : "Signed authorization saved in the vault.");
+    await load();
+  }
+
+  async function alertFamily(lookupId: string) {
+    setError(null);
+    setMessage(null);
+    const res = await fetch("/api/vault/title-consent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "alert_family",
+        lookupId,
+        beneficiaryId: helperId || undefined,
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      setError(json.error || "Could not alert family");
+      return;
+    }
+    setMessage(
+      sw
+        ? "Hatua fupi zimetumwa kwa mwanafamilia kwa SMS na WhatsApp."
+        : "Simple steps sent to the family helper by SMS and WhatsApp.",
+    );
+    if (json.notice?.whatsappUrl) {
+      window.open(json.notice.whatsappUrl, "_blank", "noopener,noreferrer");
+    }
     await load();
   }
 
@@ -402,6 +470,81 @@ export default function DiasporaBridgePage() {
             />
           </div>
         </div>
+        <fieldset className="rounded-[0.35rem] border-2 border-border p-4">
+          <legend className="px-2 text-base font-semibold text-forest-deep">
+            {sw ? "Jinsi mzee atakavyoidhinisha" : "How the elder will consent"}
+          </legend>
+          <p className="text-base text-muted">
+            {sw
+              ? "Si msimbo wa SMS. Wizara inahitaji idhini kwenye akaunti ya ArdhiSasa, au fomu ya karatasi ambayo wakili anawasilisha."
+              : "This is not an SMS code. The Ministry needs approval in the ArdhiSasa account, or a signed paper form the advocate files."}
+          </p>
+          <label className="mt-3 flex min-h-12 items-start gap-3 text-lg">
+            <input
+              type="radio"
+              className="mt-1 h-5 w-5"
+              name="consentPath"
+              checked={consentPath === "paper_authorization"}
+              onChange={() => setConsentPath("paper_authorization")}
+            />
+            <span>
+              <strong>{sw ? "A. Fomu ya karatasi (rahisi zaidi)" : "A. One-page paper form (easiest)"}</strong>
+              <span className="mt-1 block text-base text-muted">
+                {sw
+                  ? "Saini fomu moja wakati wa usajili. Wakili anaipeleka kwenye ArdhiSasa."
+                  : "Sign one page during onboarding. The advocate files it on ArdhiSasa."}
+              </span>
+            </span>
+          </label>
+          <label className="mt-3 flex min-h-12 items-start gap-3 text-lg">
+            <input
+              type="radio"
+              className="mt-1 h-5 w-5"
+              name="consentPath"
+              checked={consentPath === "family_assisted"}
+              onChange={() => setConsentPath("family_assisted")}
+            />
+            <span>
+              <strong>{sw ? "B. Msaada wa mwanafamilia" : "B. A child or heir helps"}</strong>
+              <span className="mt-1 block text-base text-muted">
+                {sw
+                  ? "Tunatuma hatua fupi kwa SMS/WhatsApp: ingia kwenye ArdhiSasa, fungua Arifa, bonyeza Approve."
+                  : "We send simple steps by SMS/WhatsApp: log into ArdhiSasa, open Notifications, tap Approve."}
+              </span>
+            </span>
+          </label>
+          {consentPath === "paper_authorization" && (
+            <p className="mt-3">
+              <Link href="/vault/title-consent" className="font-semibold text-forest underline">
+                {sw ? "Chapisha fomu ya ukurasa mmoja" : "Print the one-page authorization"}
+              </Link>
+            </p>
+          )}
+          {consentPath === "family_assisted" && (
+            <div className="mt-3">
+              <label className="field-label" htmlFor="helper">
+                {sw ? "Mtoto / mrithi atakayesaidia" : "Child / heir who will help"}
+              </label>
+              <select
+                id="helper"
+                className="field"
+                value={helperId}
+                onChange={(e) => setHelperId(e.target.value)}
+              >
+                {heirs.length === 0 && (
+                  <option value="">{sw ? "Andika warithi kwanza" : "Add heirs first"}</option>
+                )}
+                {heirs.map((h) => (
+                  <option key={h.id} value={h.id}>
+                    {h.fullName}
+                    {h.phone ? ` · ${h.phone}` : ""}
+                    {h.relationship ? ` · ${h.relationship}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </fieldset>
         <button type="submit" className="btn btn-secondary-dark">
           {sw ? "Omba wakili wa LSK awasilishe" : "Ask LSK advocate to file"}
         </button>
@@ -413,6 +556,57 @@ export default function DiasporaBridgePage() {
                   {ardhisasaStatusLabel(lu.status, locale)}
                 </p>
                 <p className="text-ink">{lookupParcelSummary(lu)}</p>
+                <p className="text-sm text-muted">{consentPathLabel(lu.consentPath, locale)}</p>
+                {lu.authorizationPath ? (
+                  <a
+                    className="mt-1 inline-block font-semibold text-forest underline"
+                    href={`/api/secure-docs/view?kind=title_consent&lookupId=${lu.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {sw ? "Fungua fomu iliyosainiwa" : "View signed authorization"}
+                  </a>
+                ) : lu.consentPath !== "family_assisted" ? (
+                  <div className="mt-3 space-y-2">
+                    <input
+                      className="field"
+                      type="file"
+                      accept="application/pdf,image/*"
+                      onChange={(e) => setConsentFile(e.target.files?.[0] || null)}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-secondary-dark"
+                      onClick={() => void uploadPaperConsent(lu.id)}
+                    >
+                      {sw ? "Pakia fomu iliyosainiwa" : "Upload signed form"}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      className="btn btn-secondary-dark"
+                      onClick={() => void alertFamily(lu.id)}
+                    >
+                      {lu.familyAlertSentAt
+                        ? sw
+                          ? "Tuma tena hatua kwa mwanafamilia"
+                          : "Send the steps to family again"
+                        : sw
+                          ? "Tuma hatua fupi kwa mwanafamilia"
+                          : "Send simple steps to family"}
+                    </button>
+                    {lu.consentHelperName ? (
+                      <p className="mt-1 text-sm text-muted">
+                        {sw ? "Msaidizi:" : "Helper:"} {lu.consentHelperName}
+                        {lu.familyAlertSentAt
+                          ? ` · ${new Date(lu.familyAlertSentAt).toLocaleString()}`
+                          : ""}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
                 {lu.documentPath ? (
                   <a
                     className="mt-1 inline-block font-semibold text-forest underline"

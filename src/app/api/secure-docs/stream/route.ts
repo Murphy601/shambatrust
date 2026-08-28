@@ -64,6 +64,8 @@ export async function GET(request: Request) {
     };
   } else if (kind === "title_search") {
     target = { kind: "title_search" as const, lookupId: lookupId || "" };
+  } else if (kind === "title_consent") {
+    target = { kind: "title_consent" as const, lookupId: lookupId || "" };
   } else if (kind === "legal") {
     target = {
       kind: "legal" as const,

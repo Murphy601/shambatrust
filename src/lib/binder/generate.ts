@@ -433,7 +433,7 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
     // ArdhiSasa filings
     h("8. ArdhiSasa filings");
     if (snapshot.lookups.length === 0) {
-      doc.text("No Ministry of Lands filings recorded. Official searches require an LSK advocate's professional ArdhiSasa account and owner OTP consent.");
+      doc.text("No Ministry of Lands filings recorded. Official searches are filed by an LSK advocate after the owner authorizes by signed paper form or ArdhiSasa Notifications approval.");
     }
     for (const lookup of snapshot.lookups) {
       doc.moveDown(0.3);

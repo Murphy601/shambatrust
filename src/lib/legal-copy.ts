@@ -52,7 +52,7 @@ const terms: Record<Locale, LegalDoc> = {
       {
         heading: "6. No guarantees of land outcomes",
         body: [
-          "We do not guarantee Ministry of Lands outcomes, absence of caveats, or that courts will uphold any plan. Official searches are filed by an LSK partner advocate on their professional ArdhiSasa account, and the registered owner must consent by OTP. Always rely on the official search PDF stored in the vault and advocate advice for high-stakes decisions.",
+          "We do not guarantee Ministry of Lands outcomes, absence of caveats, or that courts will uphold any plan. Official searches are filed by an LSK partner advocate. The owner authorizes the search with a signed paper form or by (or with help from family) approving the request in their ArdhiSasa Notifications. Always rely on the official search PDF stored in the vault and advocate advice for high-stakes decisions.",
         ],
       },
       {

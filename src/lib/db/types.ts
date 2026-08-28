@@ -406,6 +406,8 @@ export type ArdhiSasaVerificationStatus =
   | "withdrawn"
   | "legacy_simulated";
 
+export type ArdhiSasaConsentPath = "paper_authorization" | "family_assisted";
+
 export type TitleLookupRecord = {
   id: string;
   vaultId: string;
@@ -423,6 +425,14 @@ export type TitleLookupRecord = {
   ardhiSasaId: string;
   ecitizenId: string;
   status: ArdhiSasaVerificationStatus;
+  consentPath: ArdhiSasaConsentPath;
+  consentHelperBeneficiaryId: string | null;
+  consentHelperName: string;
+  consentHelperPhone: string;
+  authorizationName: string | null;
+  authorizationPath: string | null;
+  authorizationSignedAt: string | null;
+  familyAlertSentAt: string | null;
   advocateNotes: string;
   documentName: string | null;
   documentPath: string | null;

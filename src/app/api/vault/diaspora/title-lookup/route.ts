@@ -6,6 +6,7 @@ import {
   findUserById,
   getAsset,
   listAssets,
+  listBeneficiaries,
   saveTitleLookup,
 } from "@/lib/db/store";
 
@@ -17,6 +18,8 @@ const schema = z.object({
   blockNumber: z.string().optional().default(""),
   registrationSection: z.string().optional().default(""),
   landRegistryOffice: z.string().optional().default(""),
+  consentPath: z.enum(["paper_authorization", "family_assisted"]).optional(),
+  consentHelperBeneficiaryId: z.string().optional().nullable(),
 });
 
 export async function POST(request: Request) {
@@ -57,6 +60,15 @@ export async function POST(request: Request) {
     );
   }
   const owner = await findUserById(access.vault.ownerId);
+  let helperName = "";
+  let helperPhone = "";
+  const helperId = parsed.data.consentHelperBeneficiaryId || null;
+  if (helperId) {
+    const heirs = await listBeneficiaries(access.vault.id);
+    const helper = heirs.find((h) => h.id === helperId);
+    helperName = helper?.fullName || "";
+    helperPhone = helper?.phone || "";
+  }
   const lookup = await saveTitleLookup({
     vaultId: access.vault.id,
     assetId,
@@ -69,6 +81,10 @@ export async function POST(request: Request) {
     blockNumber,
     registrationSection,
     landRegistryOffice,
+    consentPath: parsed.data.consentPath,
+    consentHelperBeneficiaryId: helperId,
+    consentHelperName: helperName,
+    consentHelperPhone: helperPhone,
   });
   await addAudit({
     vaultId: access.vault.id,

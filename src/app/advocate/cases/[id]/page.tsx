@@ -12,6 +12,7 @@ import { ADVOCATE_SLA_NOTICE_EN, ADVOCATE_SLA_NOTICE_SW } from "@/lib/compliance
 import {
   ARDHISASA_NOTICE_EN,
   ardhisasaStatusLabel,
+  consentPathLabel,
   lookupParcelSummary,
 } from "@/lib/land-registry/verification";
 import type {
@@ -338,7 +339,7 @@ export default function AdvocateCasePage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Could not open filing");
       setMessage(
-        "Filing opened: Pending Advocate Submission. Log into ArdhiSasa on your professional account to request owner OTP consent.",
+        "Filing opened: Pending Verification. File on ArdhiSasa, then use the signed paper form or family-assisted Notifications approval.",
       );
       await load();
     } catch (e) {
@@ -366,7 +367,7 @@ export default function AdvocateCasePage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Could not mark filed");
-      setMessage("Marked filed. Waiting for the registered owner's OTP consent on ArdhiSasa.");
+      setMessage("Marked filed. Waiting for owner consent (paper form or ArdhiSasa Notifications approval).");
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not mark filed");
@@ -1063,7 +1064,7 @@ export default function AdvocateCasePage() {
               className="field min-h-20"
               value={lookupNotes}
               onChange={(e) => setLookupNotes(e.target.value)}
-              placeholder="e.g. Filed on ArdhiSasa professional account; owner notified for OTP."
+              placeholder="e.g. Filed on ArdhiSasa; paper authorization on file / family helper will Approve in Notifications."
             />
           </div>
           <button type="submit" className="btn btn-primary" disabled={busy}>
@@ -1118,6 +1119,26 @@ export default function AdvocateCasePage() {
                   {ardhisasaStatusLabel(lu.status)}
                 </p>
                 <p>{lookupParcelSummary(lu)}</p>
+                <p className="text-sm text-muted">{consentPathLabel(lu.consentPath)}</p>
+                {lu.authorizationPath ? (
+                  <a
+                    className="mt-1 inline-block font-semibold text-forest underline"
+                    href={`/api/secure-docs/view?kind=title_consent&lookupId=${lu.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    View signed paper authorization
+                  </a>
+                ) : lu.consentPath === "family_assisted" ? (
+                  <p className="mt-1 text-sm text-muted">
+                    Family helper: {lu.consentHelperName || "not named yet"}
+                    {lu.familyAlertSentAt ? " · steps sent" : ""}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-sm text-muted">
+                    Signed paper form not uploaded yet — ask the family to print and photograph it.
+                  </p>
+                )}
                 <div className="mt-1 font-semibold text-forest">
                   Cost: KES {lu.costKes.toLocaleString()}
                 </div>
