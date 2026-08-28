@@ -227,7 +227,7 @@ export const dictionaries = {
     pricing: {
       title: "Clear pricing — no surprise draft fees",
       subtitle:
-        "Draft edits are free. You pay at intentional milestones. Title searches are metered separately.",
+        "Draft edits are free. You pay at intentional milestones. Advocate-filed ArdhiSasa searches are billed separately.",
       tiers: [
         {
           name: "Digital Vault",
@@ -516,7 +516,7 @@ export const dictionaries = {
     pricing: {
       title: "Bei wazi — hakuna ada za rasimu za kushtukiza",
       subtitle:
-        "Kuhariri rasimu ni bure. Unalipa kwa hatua za makusudi. Utafutaji wa hati hutozwa tofauti.",
+        "Kuhariri rasimu ni bure. Unalipa kwa hatua za makusudi. Uwasilishaji wa ArdhiSasa na wakili hutozwa tofauti.",
       tiers: [
         {
           name: "Hifadhi ya Kidijitali",
