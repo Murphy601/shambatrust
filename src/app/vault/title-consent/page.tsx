@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PrintButton } from "@/components/print-button";
+import {
+  TitleConsentParcels,
+  type ConsentParcelDraft,
+} from "@/components/title-consent-parcels";
 import { readSession } from "@/lib/auth/session";
 import {
   findUserById,
@@ -31,6 +35,38 @@ export default async function TitleConsentPrintPage() {
   const sw = owner?.locale === "sw";
   const title = sw ? PAPER_AUTH_TITLE_SW : PAPER_AUTH_TITLE_EN;
   const body = sw ? PAPER_AUTH_BODY_SW : PAPER_AUTH_BODY_EN;
+  const knownParcels: ConsentParcelDraft[] = [
+    ...land.map((a) => ({
+      titleNumber: a.titleNumber,
+      parcelNumber: a.parcelNumber,
+      blockNumber: a.blockNumber,
+      registrationSection: a.registrationSection,
+      county: a.landRegistryOffice || a.county,
+    })),
+    ...lookups
+      .filter(
+        (lu) =>
+          !land.some(
+            (a) =>
+              a.titleNumber && lu.titleNumber && a.titleNumber === lu.titleNumber,
+          ),
+      )
+      .map((lu) => ({
+        titleNumber: lu.titleNumber,
+        parcelNumber: lu.parcelNumber,
+        blockNumber: lu.blockNumber,
+        registrationSection: lu.registrationSection,
+        county: lu.landRegistryOffice || lu.county,
+      })),
+  ].filter((row) =>
+    [
+      row.titleNumber,
+      row.parcelNumber,
+      row.blockNumber,
+      row.registrationSection,
+      row.county,
+    ].some((value) => value.trim().length > 0),
+  );
 
   return (
     <div className="space-y-6">
@@ -72,45 +108,10 @@ export default async function TitleConsentPrintPage() {
           </div>
         </dl>
 
-        <h3 className="mt-8 text-xl font-semibold text-forest-deep">
-          {sw ? "Viwanja vinavyoidhinishwa" : "Land parcels covered"}
-        </h3>
-        {land.length === 0 && lookups.length === 0 ? (
-          <p className="mt-2 text-muted">
-            {sw
-              ? "Andika nambari za hati / kiwanja hapa kabla ya kusaini."
-              : "Write the title / parcel numbers here before signing."}
-          </p>
-        ) : (
-          <ul className="mt-3 space-y-2 text-base">
-            {land.map((a) => (
-              <li key={a.id} className="border-b border-border py-2">
-                {a.title}
-                {a.titleNumber ? ` · LR ${a.titleNumber}` : ""}
-                {a.parcelNumber ? ` · Parcel ${a.parcelNumber}` : ""}
-                {a.county ? ` · ${a.county}` : ""}
-              </li>
-            ))}
-            {lookups
-              .filter(
-                (lu) =>
-                  !land.some(
-                    (a) =>
-                      a.titleNumber && lu.titleNumber && a.titleNumber === lu.titleNumber,
-                  ),
-              )
-              .map((lu) => (
-                <li key={lu.id} className="border-b border-border py-2">
-                  {lu.titleNumber ? `LR ${lu.titleNumber}` : ""}
-                  {lu.parcelNumber ? ` · Parcel ${lu.parcelNumber}` : ""}
-                  {lu.county ? ` · ${lu.county}` : ""}
-                </li>
-              ))}
-          </ul>
-        )}
-        <p className="mt-4 min-h-16 border-b border-border text-muted">
-          {sw ? "Nyingine:" : "Other parcels:"}
-        </p>
+        <TitleConsentParcels
+          initial={knownParcels}
+          locale={owner?.locale === "sw" ? "sw" : "en"}
+        />
 
         <div className="mt-10 grid gap-8 sm:grid-cols-2">
           <p>
