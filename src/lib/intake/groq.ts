@@ -1,6 +1,6 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getWorkerEnv } from "@/lib/cf-env";
-import { amaniSystemPrompt, GROQ_CHAT_URL, GROQ_MODEL } from "@/lib/intake/prompt";
+import { amaniSystemPrompt, GROQ_CHAT_URL, GROQ_MODEL, GROQ_WHISPER_MODEL, GROQ_WHISPER_PROMPT, GROQ_WHISPER_URL } from "@/lib/intake/prompt";
 import type { IntakeChatMessage, IntakeDraft } from "@/lib/intake/types";
 
 function readKey(value: unknown): string {
@@ -140,6 +140,54 @@ export async function groqIntakeTurn(input: {
     console.warn(
       JSON.stringify({
         event: "groq_error",
+        name: error instanceof Error ? error.name : "unknown",
+      }),
+    );
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function groqTranscribeAudio(input: {
+  apiKey: string;
+  bytes: ArrayBuffer;
+  filename: string;
+  mimeType: string;
+  language?: "en" | "sw";
+}): Promise<string | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25_000);
+  try {
+    const form = new FormData();
+    form.set(
+      "file",
+      new File([new Uint8Array(input.bytes)], input.filename || "answer.webm", {
+        type: input.mimeType || "audio/webm",
+      }),
+    );
+    form.set("model", GROQ_WHISPER_MODEL);
+    form.set("prompt", GROQ_WHISPER_PROMPT);
+    form.set("response_format", "json");
+    form.set("temperature", "0");
+    if (input.language) form.set("language", input.language);
+    const res = await fetch(GROQ_WHISPER_URL, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${input.apiKey}` },
+      body: form,
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      console.warn(JSON.stringify({ event: "groq_whisper_failed", status: res.status }));
+      return null;
+    }
+    const json = (await res.json()) as { text?: string };
+    const text = typeof json.text === "string" ? json.text.trim() : "";
+    return text || null;
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        event: "groq_whisper_error",
         name: error instanceof Error ? error.name : "unknown",
       }),
     );

@@ -1,12 +1,43 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useLocale } from "@/components/locale-provider";
+import { audioExtension, preferredRecorderMimeType } from "@/lib/audio";
+import { speakAmani } from "@/lib/intake/amani-voice";
 import { mergeIntakeDraft, parseOcrText } from "@/lib/intake/extract";
 import { ocrImageText } from "@/lib/intake/ocr-client";
 import { emptyIntakeDraft, type IntakeChatMessage, type IntakeDraft, type IntakeStep } from "@/lib/intake/types";
 import { vaultCopy } from "@/lib/vault-copy";
+
+const HEAR_AMANI_KEY = "shambatrust-hear-amani";
+
+function subscribeHearAmani(onStoreChange: () => void) {
+  const onChange = () => onStoreChange();
+  window.addEventListener("storage", onChange);
+  window.addEventListener("amani-hear", onChange);
+  return () => {
+    window.removeEventListener("storage", onChange);
+    window.removeEventListener("amani-hear", onChange);
+  };
+}
+
+function hearAmaniSnapshot(): boolean {
+  try {
+    return window.localStorage.getItem(HEAR_AMANI_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function setHearAmaniPreference(on: boolean) {
+  try {
+    window.localStorage.setItem(HEAR_AMANI_KEY, on ? "1" : "0");
+  } catch {
+    /* private mode */
+  }
+  window.dispatchEvent(new Event("amani-hear"));
+}
 
 const STEP_META: Record<IntakeStep, { en: string; sw: string }> = {
   1: { en: "Your details", sw: "Taarifa zako" },
@@ -38,12 +69,7 @@ function speechCtor(): SpeechCtor | null {
 }
 
 function speakText(text: string, locale: "en" | "sw") {
-  if (typeof window === "undefined" || !window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-  const utter = new SpeechSynthesisUtterance(text);
-  utter.lang = locale === "sw" ? "sw-KE" : "en-KE";
-  utter.rate = 0.92;
-  window.speechSynthesis.speak(utter);
+  speakAmani(text, locale);
 }
 
 function previewRows(draft: IntakeDraft, sw: boolean): Array<{ label: string; value: string }> {
@@ -73,15 +99,27 @@ export function AIElderAssistant() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
-  const [hearAmani, setHearAmani] = useState(false);
+  const hearAmani = useSyncExternalStore(
+    subscribeHearAmani,
+    hearAmaniSnapshot,
+    () => true,
+  );
   const [locked, setLocked] = useState(false);
   const [asAgent, setAsAgent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [ocrStatus, setOcrStatus] = useState<string | null>(null);
   const [readyToSubmit, setReadyToSubmit] = useState(false);
-  const [micSupported] = useState(() => Boolean(speechCtor()));
+  const [micSupported] = useState(
+    () =>
+      Boolean(speechCtor()) ||
+      (typeof MediaRecorder !== "undefined" &&
+        Boolean(navigator.mediaDevices?.getUserMedia)),
+  );
   const recRef = useRef<InstanceType<SpeechCtor> | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const draftRef = useRef(draft);
   const messagesRef = useRef(messages);
@@ -103,6 +141,11 @@ export function AIElderAssistant() {
   );
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.speechSynthesis?.getVoices();
+  }, []);
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, busy]);
 
@@ -122,12 +165,24 @@ export function AIElderAssistant() {
       const greeting = String(json.greeting || "");
       if (greeting) {
         setMessages([{ role: "assistant", content: greeting }]);
-        speakIfNeeded(greeting);
+        let shouldSpeak = true;
+        try {
+          shouldSpeak = window.localStorage.getItem(HEAR_AMANI_KEY) !== "0";
+        } catch {
+          shouldSpeak = true;
+        }
+        if (shouldSpeak) speakText(greeting, locale);
       }
     })();
     return () => {
       wantListenRef.current = false;
       recRef.current?.abort();
+      try {
+        recorderRef.current?.stop();
+      } catch {
+        /* already stopped */
+      }
+      streamRef.current?.getTracks().forEach((track) => track.stop());
       if (typeof window !== "undefined") window.speechSynthesis?.cancel();
     };
     // Opening greeting should speak once on first load.
@@ -193,7 +248,7 @@ export function AIElderAssistant() {
     }
   }
 
-  function stopListening() {
+  function stopBrowserSpeech() {
     wantListenRef.current = false;
     try {
       recRef.current?.stop();
@@ -201,25 +256,16 @@ export function AIElderAssistant() {
       /* already stopped */
     }
     recRef.current = null;
-    setListening(false);
   }
 
-  function startListening() {
-    const Ctor = speechCtor();
-    if (!Ctor) {
-      setError(
-        sw
-          ? "Kuzungumza hakupatikani kwenye kivinjari hiki. Andika jibu chako."
-          : "Voice is not available in this browser. Type your answer instead.",
-      );
-      return;
-    }
-    if (typeof window !== "undefined") window.speechSynthesis?.cancel();
-    setError(null);
-    transcriptRef.current = "";
-    wantListenRef.current = true;
-    setListening(true);
+  function stopTracks() {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+  }
 
+  function startBrowserSpeech() {
+    const Ctor = speechCtor();
+    if (!Ctor) return;
     const begin = () => {
       if (!wantListenRef.current) return;
       const rec = new Ctor();
@@ -252,8 +298,6 @@ export function AIElderAssistant() {
           } catch {
             window.setTimeout(begin, 250);
           }
-        } else {
-          setListening(false);
         }
       };
       recRef.current = rec;
@@ -262,14 +306,149 @@ export function AIElderAssistant() {
     begin();
   }
 
-  function toggleMic() {
+  async function startListening() {
+    if (typeof window !== "undefined") window.speechSynthesis?.cancel();
+    setError(null);
+    transcriptRef.current = "";
+    chunksRef.current = [];
+    wantListenRef.current = true;
+    setListening(true);
+    setInput("");
+
+    if (navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== "undefined") {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
+        if (!wantListenRef.current) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        streamRef.current = stream;
+        const mimeType = preferredRecorderMimeType();
+        const recorder = new MediaRecorder(
+          stream,
+          mimeType ? { mimeType } : undefined,
+        );
+        recorder.addEventListener("dataavailable", (event) => {
+          if (event.data.size > 0) chunksRef.current.push(event.data);
+        });
+        try {
+          recorder.start(400);
+        } catch {
+          recorder.start();
+        }
+        recorderRef.current = recorder;
+      } catch {
+        stopTracks();
+        setListening(false);
+        wantListenRef.current = false;
+        setError(
+          sw
+            ? "Ruhusu maikrofoni kwenye kivinjari, kisha jaribu tena."
+            : "Allow the microphone in your browser, then try again.",
+        );
+        return;
+      }
+    }
+
+    startBrowserSpeech();
+  }
+
+  function waitForRecording(): Promise<Blob | null> {
+    const recorder = recorderRef.current;
+    if (!recorder || recorder.state === "inactive") {
+      return Promise.resolve(null);
+    }
+    return new Promise((resolve) => {
+      recorder.addEventListener(
+        "stop",
+        () => {
+          const type = recorder.mimeType || preferredRecorderMimeType() || "audio/webm";
+          const blob = new Blob(chunksRef.current, { type });
+          chunksRef.current = [];
+          resolve(blob.size > 0 ? blob : null);
+        },
+        { once: true },
+      );
+      try {
+        if (recorder.state === "recording") {
+          try {
+            recorder.requestData();
+          } catch {
+            /* Safari may not implement requestData */
+          }
+        }
+        recorder.stop();
+      } catch {
+        resolve(null);
+      }
+    });
+  }
+
+  async function transcribeRecording(blob: Blob): Promise<string> {
+    const form = new FormData();
+    form.set("file", blob, `answer${audioExtension(blob.type || "audio/webm")}`);
+    form.set("locale", locale);
+    const res = await fetch("/api/vault/intake/transcribe", {
+      method: "POST",
+      body: form,
+    });
+    if (!res.ok) return "";
+    const json = (await res.json()) as { text?: string };
+    return typeof json.text === "string" ? json.text.trim() : "";
+  }
+
+  async function finishSpokenAnswer() {
+    const preview = (transcriptRef.current || input).trim();
+    wantListenRef.current = false;
+    stopBrowserSpeech();
+    setListening(false);
+    setBusy(true);
+    setOcrStatus(
+      sw ? "Inaandika maneno yako kwa usahihi…" : "Writing your words carefully…",
+    );
+    try {
+      const blob = await waitForRecording();
+      stopTracks();
+      recorderRef.current = null;
+      let spoken = preview;
+      if (blob) {
+        const accurate = await transcribeRecording(blob);
+        if (accurate) spoken = accurate;
+      }
+      setInput(spoken);
+      setOcrStatus(null);
+      if (spoken) await sendTurn(spoken);
+      else {
+        setError(
+          sw
+            ? "Sikukusikia vizuri. Jaribu tena, polepole kidogo."
+            : "I did not catch that. Please try again, a little slower.",
+        );
+      }
+    } catch {
+      setOcrStatus(null);
+      if (preview) await sendTurn(preview);
+      else {
+        setError(sw ? "Sikukusikia vizuri. Jaribu tena." : "I did not catch that. Please try again.");
+      }
+    } finally {
+      setBusy(false);
+      setOcrStatus(null);
+    }
+  }
+
+  async function toggleMic() {
     if (listening || wantListenRef.current) {
-      const spoken = (transcriptRef.current || input).trim();
-      stopListening();
-      if (spoken) void sendTurn(spoken);
+      await finishSpokenAnswer();
       return;
     }
-    startListening();
+    await startListening();
   }
 
   async function onPhoto(file: File | undefined) {
@@ -440,7 +619,10 @@ export function AIElderAssistant() {
             className="mt-4 space-y-3"
             onSubmit={(event) => {
               event.preventDefault();
-              stopListening();
+              if (listening || wantListenRef.current || recorderRef.current) {
+                void finishSpokenAnswer();
+                return;
+              }
               void sendTurn(input);
             }}
           >
@@ -521,11 +703,11 @@ export function AIElderAssistant() {
               <input
                 type="checkbox"
                 checked={hearAmani}
-                onChange={(event) => setHearAmani(event.target.checked)}
+                onChange={(event) => setHearAmaniPreference(event.target.checked)}
               />
               {sw
-                ? "Soma jibu la Amani kwa sauti (zimia kama inakatiza unapoongea)"
-                : "Read Amani’s replies aloud (turn off if it talks over you)"}
+                ? "Soma jibu la Amani kwa sauti ya mwanamke (zimia kama inakatiza unapoongea)"
+                : "Read Amani’s replies aloud in a woman’s voice (turn off if she talks over you)"}
             </label>
           </form>
           {ocrStatus && <p className="mt-3 text-base text-forest">{ocrStatus}</p>}

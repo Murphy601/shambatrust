@@ -2,6 +2,10 @@ import type { IntakeDraft } from "@/lib/intake/types";
 
 export const GROQ_MODEL = "llama-3.1-8b-instant";
 export const GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions";
+export const GROQ_WHISPER_URL = "https://api.groq.com/openai/v1/audio/transcriptions";
+export const GROQ_WHISPER_MODEL = "whisper-large-v3";
+export const GROQ_WHISPER_PROMPT =
+  "Kenyan English and Kiswahili, spoken by an elder. Spell Kenyan names and places exactly: Kamau, Wanjiku, Njoroge, Omondi, Achieng, Wanjiru, Otieno, Mwangi, Kipchoge, Amina, Atieno, Chebet, Kiptoo, Mutua, Wambui, Nyambura. Places: Nairobi, Nakuru, Kisumu, Kiambu, Mombasa, Eldoret, Kakamega, Machakos, Meru, Kisii. Terms: shamba, title deed, LR number, KRA PIN, SACCO, M-Pesa, national ID, hectare, acre.";
 
 export function amaniSystemPrompt(draft: IntakeDraft, locale: "en" | "sw"): string {
   return `You are 'Amani', a warm, respectful, and patient Kenyan ShambaTrust legal intake guide speaking to an elderly landowner.
