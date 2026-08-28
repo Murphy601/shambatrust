@@ -193,8 +193,19 @@ export function guidedTurn(input: {
   };
 }
 
-export function openingGreeting(locale: Locale): string {
-  return locale === "sw"
-    ? "Karibu. Mimi ni Amani, mwongozi wa ShambaTrust. Tutazungumza hatua moja baada ya nyingine. Jina lako kamili ni nani, kama lilivyo kwenye kitambulisho?"
-    : "Karibu. I am Amani, your ShambaTrust guide. We will take one simple step at a time. What is your full name, as written on your national ID?";
+export function openingGreeting(locale: Locale, draft?: IntakeDraft): string {
+  const pending = draft ? nextPendingField(draft) : QUESTIONS[0];
+  if (!pending) {
+    return locale === "sw"
+      ? "Karibu. Mimi ni Amani. Kagua kadi ya kando, kisha bonyeza Thibitisha na hifadhi ikiwa taarifa hizi ni sahihi."
+      : "Karibu. I am Amani. Check the card on the side, then tap Confirm & Submit Vault if these details are correct.";
+  }
+  if (pending.field === "fullName") {
+    return locale === "sw" ? pending.sw : pending.en;
+  }
+  const intro =
+    locale === "sw"
+      ? "Karibu. Mimi ni Amani. Tutaendelea kutoka pale hifadhi yako ilipo."
+      : "Karibu. I am Amani. We will continue from what is already in your vault.";
+  return `${intro} ${locale === "sw" ? pending.sw : pending.en}`;
 }

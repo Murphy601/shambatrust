@@ -55,7 +55,7 @@ export async function GET(request: Request) {
   const groqConfigured = Boolean(await getGroqApiKey());
   return NextResponse.json({
     draft,
-    greeting: openingGreeting(locale),
+    greeting: openingGreeting(locale, draft),
     step: intakeStepFromDraft(draft),
     readyToSubmit: isReadyToSubmit(draft) && intakeStepFromDraft(draft) === 5,
     groqConfigured,
