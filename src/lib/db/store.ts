@@ -32,12 +32,27 @@ import type {
   SuccessionCaseStatus,
   SupportSession,
   TitleLookupRecord,
-  TitleLookupResult,
   User,
   Vault,
   VaultBinder,
   VaultSetupStep,
   VaultStatus,
+  WillDraft,
+  TrustDraft,
+  BurialWishes,
+  DsarRequest,
+  DsarStatus,
+  OutboundNotice,
+  CheckoutCurrency,
+  CheckoutKind,
+  CheckoutProvider,
+  ConsensusProposal,
+  ConsensusProposalKind,
+  ConsensusSignerRole,
+  BuyoutOffer,
+  HouseholdHouse,
+  PaymentCheckout,
+  ExecutionEnforcer,
 } from "@/lib/db/types";
 import { normalizeLskNumber } from "@/lib/advocate/lsk";
 import { amountForBillingEvent } from "@/lib/ops/billing";
@@ -55,6 +70,33 @@ import type {
   SuccessionApprovalRole,
   TranscriptStatus,
 } from "@/lib/db/types";
+import { getWorkerEnv } from "@/lib/cf-env";
+import { blobKey, deleteStoredFile, uploadsDir } from "@/lib/db/blobs";
+import {
+  isMinorDob,
+  mergeTestamentaryTrustTerms,
+} from "@/lib/inheritance/minors";
+import { toKesEquivalent } from "@/lib/payments/fx";
+import { parseBirthYear } from "@/lib/legal/capacity";
+import { normalizeLandOwnership } from "@/lib/legal/ownership";
+import {
+  inferArdhiSasaStatus,
+  pendingSearchResult,
+} from "@/lib/land-registry/verification";
+import { attemptCheckoutGateway } from "@/lib/payments/gateways";
+
+export {
+  advocateUploadsDir,
+  bindersDir,
+  blobKey,
+  deleteStoredFile,
+  elderSignupUploadsDir,
+  isUnsafeBlobKey,
+  readStoredFile,
+  testamentUploadsDir,
+  uploadsDir,
+  writeStoredFile,
+} from "@/lib/db/blobs";
 
 const DATA_DIR = path.join(process.cwd(), ".data");
 const DB_PATH = path.join(DATA_DIR, "db.json");
@@ -77,14 +119,20 @@ const emptyDb = (): Database => ({
   successionApprovals: [],
   advocateApplications: [],
   billingRecords: [],
+  paymentCheckouts: [],
   supportSessions: [],
   caseMessages: [],
   consultBookings: [],
   marketingLeads: [],
   publicStatusTokens: [],
   vaultBinders: [],
+  householdHouses: [],
+  consensusProposals: [],
+  buyoutOffers: [],
   otps: [],
   auditLog: [],
+  dsarRequests: [],
+  outboundNotices: [],
 });
 
 /**
@@ -98,10 +146,14 @@ function normalizeAsset(a: Asset): Asset {
     blockNumber: a.blockNumber ?? "",
     registrationSection: a.registrationSection ?? "",
     landRegistryOffice: a.landRegistryOffice ?? "",
+    landOwnershipType: normalizeLandOwnership(a.landOwnershipType),
     saccoName: a.saccoName ?? "",
     saccoMemberNumber: a.saccoMemberNumber ?? "",
     saccoNominees: Array.isArray(a.saccoNominees) ? a.saccoNominees : [],
     mpesaNumber: a.mpesaNumber ?? "",
+    disputeFlag: Boolean(a.disputeFlag),
+    disputeNotes: a.disputeNotes ?? "",
+    familyAlert: Boolean(a.familyAlert),
   };
 }
 
@@ -130,7 +182,76 @@ function normalizePlan(p: ExecutionPlan): ExecutionPlan {
       typeof p.minGuardianApprovals === "number"
         ? p.minGuardianApprovals
         : Math.min(2, guardians.length),
+    enforcer: p.enforcer ?? null,
+    minCoSignApprovals:
+      typeof p.minCoSignApprovals === "number" ? p.minCoSignApprovals : 2,
     requireDeathNotification: Boolean(p.requireDeathNotification),
+  };
+}
+
+function normalizeWillDraft(d: WillDraft | null | undefined): WillDraft | null {
+  if (!d) return null;
+  return {
+    ...d,
+    testamentaryTrustEnabled: Boolean(d.testamentaryTrustEnabled),
+    testamentaryTrustTerms: d.testamentaryTrustTerms ?? "",
+    testamentaryTrustUntilAge: d.testamentaryTrustUntilAge ?? 18,
+    over75OrFrail: Boolean(d.over75OrFrail),
+    medicalCapacityAttached: Boolean(d.medicalCapacityAttached),
+    medicalCapacityDocumentName: d.medicalCapacityDocumentName ?? null,
+    medicalCapacityDocumentPath: d.medicalCapacityDocumentPath ?? null,
+    medicalCapacityUploadedAt: d.medicalCapacityUploadedAt ?? null,
+    disinheritanceExplanation: d.disinheritanceExplanation ?? "",
+  };
+}
+
+function normalizeTrustDraft(d: TrustDraft | null | undefined): TrustDraft | null {
+  if (!d) return null;
+  return {
+    ...d,
+    enforcerName: d.enforcerName ?? "",
+    enforcerPhone: d.enforcerPhone ?? "",
+    enforcerIdNumber: d.enforcerIdNumber ?? "",
+    enforcerOrganization: d.enforcerOrganization ?? "",
+    minCoSignApprovals:
+      typeof d.minCoSignApprovals === "number" ? d.minCoSignApprovals : 2,
+    over75OrFrail: Boolean(d.over75OrFrail),
+    medicalCapacityAttached: Boolean(d.medicalCapacityAttached),
+    medicalCapacityDocumentName: d.medicalCapacityDocumentName ?? null,
+    medicalCapacityDocumentPath: d.medicalCapacityDocumentPath ?? null,
+    medicalCapacityUploadedAt: d.medicalCapacityUploadedAt ?? null,
+  };
+}
+
+function normalizeBurialWishes(
+  d: BurialWishes | null | undefined,
+): BurialWishes | null {
+  if (!d) return null;
+  return {
+    ...d,
+    burialPlotTitle: d.burialPlotTitle ?? "",
+    burialGpsLat: d.burialGpsLat ?? null,
+    burialGpsLng: d.burialGpsLng ?? null,
+    clanEldersToInvolve: d.clanEldersToInvolve ?? "",
+    culturalTraditions: d.culturalTraditions ?? "",
+    saccoNomineeName: d.saccoNomineeName ?? "",
+    saccoNomineePhone: d.saccoNomineePhone ?? "",
+    saccoAccount: d.saccoAccount ?? "",
+    mpesaNomineePhone: d.mpesaNomineePhone ?? "",
+    insurancePolicyRef: d.insurancePolicyRef ?? "",
+    liquidityNotes: d.liquidityNotes ?? "",
+  };
+}
+
+function blankDiasporaFields() {
+  return {
+    diasporaNationalId: "",
+    ecitizenId: "",
+    ardhiSasaId: "",
+    passportNumber: "",
+    passportCountry: "",
+    countryOfResidence: "",
+    isDiaspora: false,
   };
 }
 
@@ -163,19 +284,7 @@ function normalizeReview(r: ReviewRequest): ReviewRequest {
   };
 }
 
-async function ensureDb(): Promise<void> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  try {
-    await fs.access(DB_PATH);
-  } catch {
-    await fs.writeFile(DB_PATH, JSON.stringify(emptyDb(), null, 2), "utf8");
-  }
-}
-
-export async function readDb(): Promise<Database> {
-  await ensureDb();
-  const raw = await fs.readFile(DB_PATH, "utf8");
-  const parsed = JSON.parse(raw) as Partial<Database>;
+function normalizeDb(parsed: Partial<Database>): Database {
   const db = { ...emptyDb(), ...parsed } as Database;
   db.users = (db.users || []).map((u) => ({
     ...u,
@@ -201,6 +310,14 @@ export async function readDb(): Promise<Database> {
     advocateMaxCases: u.advocateMaxCases ?? null,
     advocateOooUntil: u.advocateOooUntil ?? null,
     advocateOooNote: u.advocateOooNote ?? "",
+    diasporaNationalId: u.diasporaNationalId ?? "",
+    ecitizenId: u.ecitizenId ?? "",
+    ardhiSasaId: u.ardhiSasaId ?? "",
+    passportNumber: u.passportNumber ?? "",
+    passportCountry: u.passportCountry ?? "",
+    countryOfResidence: u.countryOfResidence ?? "",
+    isDiaspora: Boolean(u.isDiaspora),
+    birthYear: parseBirthYear(u.birthYear),
   }));
   db.vaults = (db.vaults || []).map((v) => ({
     ...v,
@@ -212,11 +329,45 @@ export async function readDb(): Promise<Database> {
     amendmentFeeCharged: Boolean(v.amendmentFeeCharged),
     forceLocked: Boolean(v.forceLocked),
     opsNotes: v.opsNotes ?? "",
+    willDraft: normalizeWillDraft(v.willDraft),
+    trustDraft: normalizeTrustDraft(v.trustDraft),
+    burialWishes: normalizeBurialWishes(v.burialWishes),
+    physicalDocumentLocation: v.physicalDocumentLocation ?? "",
+    physicalDocumentUpdatedAt: v.physicalDocumentUpdatedAt ?? null,
+    emergencyCardToken: v.emergencyCardToken ?? null,
+    emergencyCardCreatedAt: v.emergencyCardCreatedAt ?? null,
+    emergencyMedicalNotes: v.emergencyMedicalNotes ?? "",
+    emergencyPrimaryContactName: v.emergencyPrimaryContactName ?? "",
+    emergencyPrimaryContactPhone: v.emergencyPrimaryContactPhone ?? "",
   }));
   db.titleLookups = (db.titleLookups || []).map((t) => ({
     ...t,
     reviewRequestId: t.reviewRequestId ?? null,
     costKes: t.costKes ?? amountForBillingEvent("title_lookup"),
+    ardhiSasaId: t.ardhiSasaId ?? "",
+    ecitizenId: t.ecitizenId ?? "",
+    parcelNumber: t.parcelNumber ?? "",
+    blockNumber: t.blockNumber ?? "",
+    registrationSection: t.registrationSection ?? "",
+    landRegistryOffice: t.landRegistryOffice ?? "",
+    advocateNotes: t.advocateNotes ?? "",
+    consentPath: t.consentPath === "family_assisted" ? "family_assisted" : "paper_authorization",
+    consentHelperBeneficiaryId: t.consentHelperBeneficiaryId ?? null,
+    consentHelperName: t.consentHelperName ?? "",
+    consentHelperPhone: t.consentHelperPhone ?? "",
+    authorizationName: t.authorizationName ?? null,
+    authorizationPath: t.authorizationPath ?? null,
+    authorizationSignedAt: t.authorizationSignedAt ?? null,
+    familyAlertSentAt: t.familyAlertSentAt ?? null,
+    documentName: t.documentName ?? null,
+    documentPath: t.documentPath ?? null,
+    filedAt: t.filedAt ?? null,
+    certificateUploadedAt: t.certificateUploadedAt ?? null,
+    updatedAt: t.updatedAt ?? t.createdAt,
+    result: t.result
+      ? { ...t.result, simulated: Boolean(t.result.simulated) }
+      : pendingSearchResult(),
+    status: inferArdhiSasaStatus(t),
   }));
   db.reviewRequests = (db.reviewRequests || []).map(normalizeReview);
   db.assets = (db.assets || []).map(normalizeAsset);
@@ -235,17 +386,101 @@ export async function readDb(): Promise<Database> {
   }));
   db.advocateMatches = db.advocateMatches || [];
   db.advocateApplications = db.advocateApplications || [];
-  db.billingRecords = db.billingRecords || [];
+  db.billingRecords = (db.billingRecords || []).map((b) => ({
+    ...b,
+    currency: b.currency || "KES",
+    provider: b.provider || "till",
+  }));
+  db.paymentCheckouts = db.paymentCheckouts || [];
   db.supportSessions = db.supportSessions || [];
   db.caseMessages = db.caseMessages || [];
-  db.consultBookings = db.consultBookings || [];
+  db.consultBookings = (db.consultBookings || []).map((c) => ({
+    ...c,
+    reviewRequestId: c.reviewRequestId || null,
+    kind: c.kind || "consult",
+    diasporaSignerName: c.diasporaSignerName ?? "",
+    diasporaSignerPhone: c.diasporaSignerPhone ?? "",
+    meetingUrl: c.meetingUrl ?? "",
+  }));
   db.marketingLeads = db.marketingLeads || [];
   db.publicStatusTokens = db.publicStatusTokens || [];
   db.vaultBinders = db.vaultBinders || [];
+  db.householdHouses = db.householdHouses || [];
+  db.consensusProposals = (db.consensusProposals || []).map((p) => ({
+    ...p,
+    signatures: Array.isArray(p.signatures) ? p.signatures : [],
+  }));
+  db.buyoutOffers = (db.buyoutOffers || []).map((o) => ({
+    ...o,
+    responses: Array.isArray(o.responses) ? o.responses : [],
+  }));
+  db.dsarRequests = db.dsarRequests || [];
+  db.outboundNotices = db.outboundNotices || [];
+  db.beneficiaries = (db.beneficiaries || []).map((b) => ({
+    ...b,
+    dateOfBirth: b.dateOfBirth ?? "",
+    houseId: b.houseId ?? null,
+    isMinor: Boolean(b.isMinor) || isMinorDob(b.dateOfBirth ?? ""),
+  }));
   return db;
 }
 
+async function ensureDb(): Promise<void> {
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  try {
+    await fs.access(DB_PATH);
+  } catch {
+    await fs.writeFile(DB_PATH, JSON.stringify(emptyDb(), null, 2), "utf8");
+  }
+}
+
+export async function readDb(): Promise<Database> {
+  const env = await getWorkerEnv();
+  if (env.DB) {
+    const row = await env.DB.prepare(
+      "SELECT payload FROM app_state WHERE id = 1",
+    ).first<{ payload: string }>();
+    if (!row?.payload) {
+      return normalizeDb(emptyDb());
+    }
+    return normalizeDb(JSON.parse(row.payload) as Partial<Database>);
+  }
+  await ensureDb();
+  const raw = await fs.readFile(DB_PATH, "utf8");
+  return normalizeDb(JSON.parse(raw) as Partial<Database>);
+}
+
 export async function writeDb(db: Database): Promise<void> {
+  const env = await getWorkerEnv();
+  if (env.DB) {
+    const row = await env.DB.prepare(
+      "SELECT payload FROM app_state WHERE id = 1",
+    ).first<{ payload: string }>();
+    if (row?.payload) {
+      try {
+        const existing = JSON.parse(row.payload) as Partial<Database>;
+        if ((existing.users?.length || 0) > 0 && (db.users?.length || 0) === 0) {
+          throw new Error(
+            "Refusing to overwrite the live vault with an empty user list.",
+          );
+        }
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message.includes("Refusing to overwrite")
+        ) {
+          throw error;
+        }
+      }
+    }
+    await env.DB.prepare(
+      `INSERT INTO app_state (id, payload, updated_at) VALUES (1, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at`,
+    )
+      .bind(JSON.stringify(db), new Date().toISOString())
+      .run();
+    return;
+  }
   await ensureDb();
   await fs.writeFile(DB_PATH, JSON.stringify(db, null, 2), "utf8");
 }
@@ -376,6 +611,8 @@ export async function createUser(input: {
     advocateMaxCases: input.role === "advocate" ? 10 : null,
     advocateOooUntil: null,
     advocateOooNote: "",
+    ...blankDiasporaFields(),
+    birthYear: null,
     createdAt: new Date().toISOString(),
   };
   db.users.push(user);
@@ -394,6 +631,16 @@ export async function createUser(input: {
       amendmentFeeCharged: false,
       forceLocked: false,
       opsNotes: "",
+      willDraft: null,
+      trustDraft: null,
+      burialWishes: null,
+      physicalDocumentLocation: "",
+      physicalDocumentUpdatedAt: null,
+      emergencyCardToken: null,
+      emergencyCardCreatedAt: null,
+      emergencyMedicalNotes: "",
+      emergencyPrimaryContactName: "",
+      emergencyPrimaryContactPhone: "",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -492,6 +739,7 @@ export async function saveAsset(
     blockNumber: asset.blockNumber || "",
     registrationSection: asset.registrationSection || "",
     landRegistryOffice: asset.landRegistryOffice || "",
+    landOwnershipType: normalizeLandOwnership(asset.landOwnershipType),
     registrationNumber: asset.registrationNumber || "",
     makeModel: asset.makeModel || "",
     year: asset.year || "",
@@ -504,6 +752,9 @@ export async function saveAsset(
     saccoMemberNumber: asset.saccoMemberNumber || "",
     saccoNominees,
     mpesaNumber: asset.mpesaNumber || "",
+    disputeFlag: Boolean(asset.disputeFlag),
+    disputeNotes: asset.disputeNotes || "",
+    familyAlert: Boolean(asset.familyAlert),
     createdAt: now,
     updatedAt: now,
   };
@@ -541,8 +792,58 @@ export async function listBeneficiaries(
   return db.beneficiaries.filter((b) => b.vaultId === vaultId);
 }
 
+function applyMinorProtectionInDb(db: Database, vaultId: string): void {
+  const vault = db.vaults.find((v) => v.id === vaultId);
+  if (!vault) return;
+  const heirs = db.beneficiaries.filter((b) => b.vaultId === vaultId);
+  const now = new Date();
+  for (const heir of heirs) {
+    heir.isMinor = isMinorDob(heir.dateOfBirth || "", now);
+  }
+  const minors = heirs.filter((h) => h.isMinor);
+  if (minors.length === 0) return;
+  const terms = mergeTestamentaryTrustTerms(
+    vault.willDraft?.testamentaryTrustTerms || "",
+    minors,
+  );
+  const stamp = new Date().toISOString();
+  if (!vault.willDraft) {
+    vault.willDraft = {
+      testatorName: "",
+      testatorId: "",
+      primaryResidence: "",
+      executorName: "",
+      executorPhone: "",
+      altExecutorName: "",
+      altExecutorPhone: "",
+      guardianName: "",
+      guardianPhone: "",
+      altGuardianName: "",
+      witnessAcknowledged: false,
+      notes: "",
+      testamentaryTrustEnabled: true,
+      testamentaryTrustTerms: terms,
+      testamentaryTrustUntilAge: 18,
+      over75OrFrail: false,
+      medicalCapacityAttached: false,
+      medicalCapacityDocumentName: null,
+      medicalCapacityDocumentPath: null,
+      medicalCapacityUploadedAt: null,
+      disinheritanceExplanation: "",
+      updatedAt: stamp,
+    };
+  } else {
+    vault.willDraft.testamentaryTrustEnabled = true;
+    vault.willDraft.testamentaryTrustUntilAge =
+      vault.willDraft.testamentaryTrustUntilAge || 18;
+    vault.willDraft.testamentaryTrustTerms = terms;
+    vault.willDraft.updatedAt = stamp;
+  }
+  vault.updatedAt = stamp;
+}
+
 export async function saveBeneficiary(
-  input: Omit<Beneficiary, "id" | "createdAt"> & { id?: string },
+  input: Omit<Beneficiary, "id" | "createdAt" | "isMinor"> & { id?: string },
 ): Promise<Beneficiary> {
   const db = await readDb();
   const phone = input.phone.trim()
@@ -553,6 +854,9 @@ export async function saveBeneficiary(
     idNumber: input.idNumber,
     phone,
     relationship: input.relationship,
+    dateOfBirth: input.dateOfBirth || "",
+    houseId: input.houseId ?? null,
+    isMinor: isMinorDob(input.dateOfBirth || ""),
   };
   if (input.id) {
     const idx = db.beneficiaries.findIndex(
@@ -565,6 +869,7 @@ export async function saveBeneficiary(
         id: input.id,
         vaultId: input.vaultId,
       };
+      applyMinorProtectionInDb(db, input.vaultId);
       await advanceSetupStep(db, input.vaultId, "allocations");
       await touchVault(db, input.vaultId);
       await writeDb(db);
@@ -578,6 +883,7 @@ export async function saveBeneficiary(
     createdAt: new Date().toISOString(),
   };
   db.beneficiaries.push(created);
+  applyMinorProtectionInDb(db, input.vaultId);
   await advanceSetupStep(db, input.vaultId, "allocations");
   await touchVault(db, input.vaultId);
   await writeDb(db);
@@ -597,6 +903,7 @@ export async function deleteBeneficiary(
     (a) => a.beneficiaryId !== beneficiaryId,
   );
   if (db.beneficiaries.length === before) return false;
+  applyMinorProtectionInDb(db, vaultId);
   await touchVault(db, vaultId);
   await writeDb(db);
   return true;
@@ -1057,13 +1364,24 @@ export async function saveTitleLookup(input: {
   assetId: string | null;
   titleNumber: string;
   county: string;
-  result: TitleLookupResult;
   requestedByUserId: string;
   reviewRequestId?: string | null;
   costKes?: number;
+  ardhiSasaId?: string;
+  ecitizenId?: string;
+  parcelNumber?: string;
+  blockNumber?: string;
+  registrationSection?: string;
+  landRegistryOffice?: string;
+  advocateNotes?: string;
+  consentPath?: TitleLookupRecord["consentPath"];
+  consentHelperBeneficiaryId?: string | null;
+  consentHelperName?: string;
+  consentHelperPhone?: string;
 }): Promise<TitleLookupRecord> {
   const db = await readDb();
   const costKes = input.costKes ?? amountForBillingEvent("title_lookup");
+  const now = new Date().toISOString();
   const record: TitleLookupRecord = {
     id: newId(),
     vaultId: input.vaultId,
@@ -1071,10 +1389,31 @@ export async function saveTitleLookup(input: {
     reviewRequestId: input.reviewRequestId ?? null,
     titleNumber: input.titleNumber,
     county: input.county,
-    result: input.result,
+    parcelNumber: input.parcelNumber || "",
+    blockNumber: input.blockNumber || "",
+    registrationSection: input.registrationSection || "",
+    landRegistryOffice: input.landRegistryOffice || "",
+    result: pendingSearchResult(),
     requestedByUserId: input.requestedByUserId,
     costKes,
-    createdAt: new Date().toISOString(),
+    ardhiSasaId: input.ardhiSasaId || "",
+    ecitizenId: input.ecitizenId || "",
+    status: "pending_advocate_submission",
+    consentPath: input.consentPath === "family_assisted" ? "family_assisted" : "paper_authorization",
+    consentHelperBeneficiaryId: input.consentHelperBeneficiaryId ?? null,
+    consentHelperName: input.consentHelperName || "",
+    consentHelperPhone: input.consentHelperPhone || "",
+    authorizationName: null,
+    authorizationPath: null,
+    authorizationSignedAt: null,
+    familyAlertSentAt: null,
+    advocateNotes: input.advocateNotes || "",
+    documentName: null,
+    documentPath: null,
+    filedAt: null,
+    certificateUploadedAt: null,
+    createdAt: now,
+    updatedAt: now,
   };
   db.titleLookups.push(record);
   db.billingRecords.push({
@@ -1082,16 +1421,99 @@ export async function saveTitleLookup(input: {
     vaultId: input.vaultId,
     actorUserId: input.requestedByUserId,
     kind: "title_lookup",
-    detail: `Title ${input.titleNumber || "(none)"} · ${input.county}`,
+    detail: `ArdhiSasa filing request · ${input.titleNumber || "(no LR)"} · ${input.county}`,
     amountKes: costKes,
+    currency: "KES",
+    provider: "till",
     paid: false,
     paidAt: null,
     paidByUserId: null,
     relatedId: record.id,
-    createdAt: record.createdAt,
+    createdAt: now,
   });
   await writeDb(db);
   return record;
+}
+
+export async function getTitleLookup(
+  id: string,
+): Promise<TitleLookupRecord | undefined> {
+  const db = await readDb();
+  return db.titleLookups.find((t) => t.id === id);
+}
+
+export async function updateTitleLookup(input: {
+  id: string;
+  status?: TitleLookupRecord["status"];
+  advocateNotes?: string;
+  documentName?: string | null;
+  documentPath?: string | null;
+  reviewRequestId?: string | null;
+  consentPath?: TitleLookupRecord["consentPath"];
+  consentHelperBeneficiaryId?: string | null;
+  consentHelperName?: string;
+  consentHelperPhone?: string;
+  authorizationName?: string | null;
+  authorizationPath?: string | null;
+  familyAlertSentAt?: string | null;
+}): Promise<TitleLookupRecord | null> {
+  const db = await readDb();
+  const row = db.titleLookups.find((t) => t.id === input.id);
+  if (!row) return null;
+  const now = new Date().toISOString();
+  if (input.status) row.status = input.status;
+  if (typeof input.advocateNotes === "string") row.advocateNotes = input.advocateNotes;
+  if (input.reviewRequestId !== undefined) {
+    row.reviewRequestId = input.reviewRequestId;
+  }
+  if (input.documentName !== undefined) row.documentName = input.documentName;
+  if (input.documentPath !== undefined) row.documentPath = input.documentPath;
+  if (input.consentPath) row.consentPath = input.consentPath;
+  if (input.consentHelperBeneficiaryId !== undefined) {
+    row.consentHelperBeneficiaryId = input.consentHelperBeneficiaryId;
+  }
+  if (typeof input.consentHelperName === "string") {
+    row.consentHelperName = input.consentHelperName;
+  }
+  if (typeof input.consentHelperPhone === "string") {
+    row.consentHelperPhone = input.consentHelperPhone;
+  }
+  if (input.authorizationName !== undefined) row.authorizationName = input.authorizationName;
+  if (input.authorizationPath !== undefined) {
+    row.authorizationPath = input.authorizationPath;
+    if (input.authorizationPath) row.authorizationSignedAt = now;
+  }
+  if (input.familyAlertSentAt !== undefined) {
+    row.familyAlertSentAt = input.familyAlertSentAt;
+  }
+  if (input.status === "awaiting_owner_consent" && !row.filedAt) {
+    row.filedAt = now;
+    row.result = {
+      ...row.result,
+      simulated: false,
+      registrationStatus: "awaiting_owner_consent",
+      rawNote:
+        row.consentPath === "family_assisted"
+          ? "Search filed on ArdhiSasa. Waiting for the owner (or a family helper) to Approve the notification in the ArdhiSasa portal."
+          : "Search filed on ArdhiSasa. Paper authorization is on file (or will be uploaded) so the advocate can complete the search.",
+      checkedAt: now,
+    };
+  }
+  if (input.documentPath) {
+    row.status = "certificate_on_file";
+    row.certificateUploadedAt = now;
+    row.result = {
+      ...row.result,
+      simulated: false,
+      found: true,
+      registrationStatus: "officially_verified",
+      rawNote: "Officially Verified by LSK Advocate. Search certificate stored in the vault.",
+      checkedAt: now,
+    };
+  }
+  row.updatedAt = now;
+  await writeDb(db);
+  return row;
 }
 
 export async function listAllTitleLookups(): Promise<TitleLookupRecord[]> {
@@ -1199,6 +1621,8 @@ export async function ensureAdminUser(input: {
     advocateMaxCases: null,
     advocateOooUntil: null,
     advocateOooNote: "",
+    ...blankDiasporaFields(),
+    birthYear: null,
     createdAt: new Date().toISOString(),
   };
   db.users.push(user);
@@ -1217,6 +1641,8 @@ export function defaultExecutionPlan(
     minTrusteeApprovals: 2,
     guardians: [],
     minGuardianApprovals: 2,
+    enforcer: null,
+    minCoSignApprovals: 2,
     requireDeathCertificate: true,
     requireDeathNotification: true,
     coolingHours: 48,
@@ -1238,6 +1664,8 @@ export async function saveExecutionPlan(input: {
   minTrusteeApprovals: number;
   guardians: ExecutionGuardian[];
   minGuardianApprovals: number;
+  enforcer?: ExecutionEnforcer | null;
+  minCoSignApprovals?: number;
   requireDeathCertificate: boolean;
   requireDeathNotification: boolean;
   coolingHours: number;
@@ -1246,11 +1674,15 @@ export async function saveExecutionPlan(input: {
   const db = await readDb();
   const now = new Date().toISOString();
   const existing = db.executionPlans.find((p) => p.vaultId === input.vaultId);
+  const enforcer = input.enforcer ?? existing?.enforcer ?? null;
+  const minCoSignApprovals = input.minCoSignApprovals ?? existing?.minCoSignApprovals ?? 2;
   if (existing) {
     existing.trustees = input.trustees;
     existing.minTrusteeApprovals = input.minTrusteeApprovals;
     existing.guardians = input.guardians;
     existing.minGuardianApprovals = input.minGuardianApprovals;
+    existing.enforcer = enforcer;
+    existing.minCoSignApprovals = minCoSignApprovals;
     existing.requireDeathCertificate = input.requireDeathCertificate;
     existing.requireDeathNotification = input.requireDeathNotification;
     existing.coolingHours = input.coolingHours;
@@ -1267,6 +1699,8 @@ export async function saveExecutionPlan(input: {
     minTrusteeApprovals: input.minTrusteeApprovals,
     guardians: input.guardians,
     minGuardianApprovals: input.minGuardianApprovals,
+    enforcer,
+    minCoSignApprovals,
     requireDeathCertificate: input.requireDeathCertificate,
     requireDeathNotification: input.requireDeathNotification,
     coolingHours: input.coolingHours,
@@ -2048,6 +2482,8 @@ export async function reviewAdvocateApplication(input: {
         advocateMaxCases: 10,
         advocateOooUntil: null,
         advocateOooNote: "",
+        ...blankDiasporaFields(),
+        birthYear: null,
         createdAt: now,
       };
       db.users.push(user);
@@ -2273,6 +2709,74 @@ export async function updateUserPreferences(input: {
   return user;
 }
 
+export async function updateOwnerBirthYear(
+  userId: string,
+  birthYear: number | null,
+): Promise<User | null> {
+  const db = await readDb();
+  const user = db.users.find((u) => u.id === userId);
+  if (!user) return null;
+  user.birthYear = parseBirthYear(birthYear);
+  await writeDb(db);
+  return user;
+}
+
+export async function saveVaultLocator(
+  vaultId: string,
+  input: {
+    physicalDocumentLocation?: string;
+    emergencyMedicalNotes?: string;
+    emergencyPrimaryContactName?: string;
+    emergencyPrimaryContactPhone?: string;
+    rotateEmergencyCard?: boolean;
+  },
+): Promise<{
+  physicalDocumentLocation: string;
+  physicalDocumentUpdatedAt: string | null;
+  emergencyCardToken: string | null;
+  emergencyCardCreatedAt: string | null;
+  emergencyMedicalNotes: string;
+  emergencyPrimaryContactName: string;
+  emergencyPrimaryContactPhone: string;
+}> {
+  const db = await readDb();
+  const vault = db.vaults.find((v) => v.id === vaultId);
+  if (!vault) throw new Error("Vault not found");
+  if (typeof input.physicalDocumentLocation === "string") {
+    vault.physicalDocumentLocation = input.physicalDocumentLocation.trim();
+    vault.physicalDocumentUpdatedAt = new Date().toISOString();
+  }
+  if (typeof input.emergencyMedicalNotes === "string") {
+    vault.emergencyMedicalNotes = input.emergencyMedicalNotes.trim();
+  }
+  if (typeof input.emergencyPrimaryContactName === "string") {
+    vault.emergencyPrimaryContactName = input.emergencyPrimaryContactName.trim();
+  }
+  if (typeof input.emergencyPrimaryContactPhone === "string") {
+    vault.emergencyPrimaryContactPhone = input.emergencyPrimaryContactPhone.trim();
+  }
+  if (input.rotateEmergencyCard || !vault.emergencyCardToken) {
+    vault.emergencyCardToken = newId().replace(/-/g, "").slice(0, 20);
+    vault.emergencyCardCreatedAt = new Date().toISOString();
+  }
+  vault.updatedAt = new Date().toISOString();
+  await writeDb(db);
+  return {
+    physicalDocumentLocation: vault.physicalDocumentLocation,
+    physicalDocumentUpdatedAt: vault.physicalDocumentUpdatedAt,
+    emergencyCardToken: vault.emergencyCardToken,
+    emergencyCardCreatedAt: vault.emergencyCardCreatedAt,
+    emergencyMedicalNotes: vault.emergencyMedicalNotes,
+    emergencyPrimaryContactName: vault.emergencyPrimaryContactName,
+    emergencyPrimaryContactPhone: vault.emergencyPrimaryContactPhone,
+  };
+}
+
+export async function findVaultByEmergencyToken(token: string) {
+  const db = await readDb();
+  return db.vaults.find((v) => v.emergencyCardToken && v.emergencyCardToken === token);
+}
+
 export async function updateAdvocateCounties(
   userId: string,
   counties: string[],
@@ -2290,30 +2794,10 @@ export async function listActiveAdvocates(): Promise<User[]> {
   return db.users.filter((u) => u.role === "advocate" && !u.advocateSuspended);
 }
 
-export function uploadsDir(): string {
-  return path.join(DATA_DIR, "uploads");
-}
-
-export function testamentUploadsDir(): string {
-  return path.join(DATA_DIR, "uploads", "testaments");
-}
-
-export function advocateUploadsDir(): string {
-  return path.join(DATA_DIR, "uploads", "advocate-apps");
-}
-
-export function elderSignupUploadsDir(): string {
-  return path.join(DATA_DIR, "uploads", "elder-signup");
-}
-
-export function bindersDir(): string {
-  return path.join(DATA_DIR, "uploads", "binders");
-}
-
 /** Resolve a stored path (absolute or relative under uploads/). */
 export function resolveStoredFilePath(stored: string): string {
   if (path.isAbsolute(stored)) return stored;
-  return path.join(uploadsDir(), stored);
+  return path.join(uploadsDir(), blobKey(stored));
 }
 
 export async function listVaultBinders(vaultId: string): Promise<VaultBinder[]> {
@@ -2443,6 +2927,8 @@ export async function recordBillingEvent(input: {
     amountKes:
       input.amountKes ??
       amountForBillingEvent(input.kind, input.packageTier),
+    currency: "KES",
+    provider: "till",
     paid: false,
     paidAt: null,
     paidByUserId: null,
@@ -2588,7 +3074,7 @@ export async function purgeExpiredUploadPaths(
     for (const doc of docs) {
       if (doc.documentPath) {
         try {
-          await fs.unlink(doc.documentPath);
+          await deleteStoredFile(doc.documentPath);
           paths.push(doc.documentPath);
           doc.documentPath = null;
         } catch {
@@ -2673,15 +3159,34 @@ export async function listCaseMessages(reviewRequestId: string): Promise<CaseMes
 }
 
 export async function saveConsultBooking(
-  input: Omit<ConsultBooking, "id" | "createdAt" | "status"> & {
+  input: {
+    reviewRequestId?: string | null;
+    vaultId: string;
+    advocateId: string;
+    mode: ConsultBooking["mode"];
+    scheduledAt: string;
+    notes?: string;
     status?: ConsultBooking["status"];
+    kind?: ConsultBooking["kind"];
+    diasporaSignerName?: string;
+    diasporaSignerPhone?: string;
+    meetingUrl?: string;
   },
 ): Promise<ConsultBooking> {
   const db = await readDb();
   const row: ConsultBooking = {
     id: newId(),
-    ...input,
+    reviewRequestId: input.reviewRequestId ?? null,
+    vaultId: input.vaultId,
+    advocateId: input.advocateId,
+    mode: input.mode,
+    scheduledAt: input.scheduledAt,
+    notes: input.notes || "",
     status: input.status || "scheduled",
+    kind: input.kind || "consult",
+    diasporaSignerName: input.diasporaSignerName || "",
+    diasporaSignerPhone: input.diasporaSignerPhone || "",
+    meetingUrl: input.meetingUrl || "",
     createdAt: new Date().toISOString(),
   };
   db.consultBookings.push(row);
@@ -2696,6 +3201,15 @@ export async function listConsultBookingsForAdvocate(
   return db.consultBookings
     .filter((c) => c.advocateId === advocateId)
     .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
+}
+
+export async function listConsultBookingsForVault(
+  vaultId: string,
+): Promise<ConsultBooking[]> {
+  const db = await readDb();
+  return db.consultBookings
+    .filter((c) => c.vaultId === vaultId)
+    .sort((a, b) => b.scheduledAt.localeCompare(a.scheduledAt));
 }
 
 export async function createMarketingLead(
@@ -2734,3 +3248,751 @@ export async function getPublicStatusToken(
   const db = await readDb();
   return db.publicStatusTokens.find((t) => t.token === token);
 }
+
+export async function saveWillDraft(
+  vaultId: string,
+  draft: Omit<WillDraft, "updatedAt">,
+): Promise<WillDraft> {
+  const db = await readDb();
+  const vault = db.vaults.find((v) => v.id === vaultId);
+  if (!vault) throw new Error("Vault not found");
+  const saved: WillDraft = {
+    ...draft,
+    testamentaryTrustEnabled: Boolean(draft.testamentaryTrustEnabled),
+    testamentaryTrustTerms: draft.testamentaryTrustTerms || "",
+    testamentaryTrustUntilAge: draft.testamentaryTrustUntilAge || 18,
+    over75OrFrail: Boolean(draft.over75OrFrail),
+    medicalCapacityAttached: Boolean(draft.medicalCapacityAttached),
+    medicalCapacityDocumentName: draft.medicalCapacityDocumentName || null,
+    medicalCapacityDocumentPath: draft.medicalCapacityDocumentPath || null,
+    medicalCapacityUploadedAt: draft.medicalCapacityUploadedAt || null,
+    disinheritanceExplanation: draft.disinheritanceExplanation || "",
+    updatedAt: new Date().toISOString(),
+  };
+  vault.willDraft = saved;
+  vault.updatedAt = saved.updatedAt;
+  await writeDb(db);
+  return saved;
+}
+
+export async function saveTrustDraft(
+  vaultId: string,
+  draft: Omit<TrustDraft, "updatedAt">,
+): Promise<TrustDraft> {
+  const db = await readDb();
+  const vault = db.vaults.find((v) => v.id === vaultId);
+  if (!vault) throw new Error("Vault not found");
+  const saved: TrustDraft = {
+    ...draft,
+    enforcerName: draft.enforcerName || "",
+    enforcerPhone: draft.enforcerPhone || "",
+    enforcerIdNumber: draft.enforcerIdNumber || "",
+    enforcerOrganization: draft.enforcerOrganization || "",
+    minCoSignApprovals: draft.minCoSignApprovals || 2,
+    over75OrFrail: Boolean(draft.over75OrFrail),
+    medicalCapacityAttached: Boolean(draft.medicalCapacityAttached),
+    medicalCapacityDocumentName: draft.medicalCapacityDocumentName || null,
+    medicalCapacityDocumentPath: draft.medicalCapacityDocumentPath || null,
+    medicalCapacityUploadedAt: draft.medicalCapacityUploadedAt || null,
+    updatedAt: new Date().toISOString(),
+  };
+  vault.trustDraft = saved;
+  vault.updatedAt = saved.updatedAt;
+  await writeDb(db);
+  return saved;
+}
+
+export async function saveBurialWishes(
+  vaultId: string,
+  wishes: Omit<BurialWishes, "updatedAt">,
+): Promise<BurialWishes> {
+  const db = await readDb();
+  const vault = db.vaults.find((v) => v.id === vaultId);
+  if (!vault) throw new Error("Vault not found");
+  const saved: BurialWishes = {
+    ...wishes,
+    burialPlotTitle: wishes.burialPlotTitle || "",
+    burialGpsLat: wishes.burialGpsLat ?? null,
+    burialGpsLng: wishes.burialGpsLng ?? null,
+    clanEldersToInvolve: wishes.clanEldersToInvolve || "",
+    culturalTraditions: wishes.culturalTraditions || "",
+    saccoNomineeName: wishes.saccoNomineeName || "",
+    saccoNomineePhone: wishes.saccoNomineePhone || "",
+    saccoAccount: wishes.saccoAccount || "",
+    mpesaNomineePhone: wishes.mpesaNomineePhone || "",
+    insurancePolicyRef: wishes.insurancePolicyRef || "",
+    liquidityNotes: wishes.liquidityNotes || "",
+    updatedAt: new Date().toISOString(),
+  };
+  vault.burialWishes = saved;
+  vault.updatedAt = saved.updatedAt;
+  await writeDb(db);
+  return saved;
+}
+
+export async function queueOutboundNotice(input: {
+  vaultId: string | null;
+  channel: "whatsapp" | "sms";
+  toPhone: string;
+  body: string;
+  relatedAction: string;
+  status?: OutboundNotice["status"];
+  error?: string | null;
+}): Promise<OutboundNotice> {
+  const db = await readDb();
+  const notice: OutboundNotice = {
+    id: newId(),
+    vaultId: input.vaultId,
+    channel: input.channel,
+    toPhone: input.toPhone,
+    body: input.body,
+    status: input.status || "queued",
+    relatedAction: input.relatedAction,
+    createdAt: new Date().toISOString(),
+    sentAt: input.status === "sent" ? new Date().toISOString() : null,
+    error: input.error || null,
+  };
+  db.outboundNotices.push(notice);
+  await writeDb(db);
+  return notice;
+}
+
+export async function listOutboundNotices(): Promise<OutboundNotice[]> {
+  const db = await readDb();
+  return [...db.outboundNotices].sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt),
+  );
+}
+
+export async function listDisputedAssets(): Promise<
+  Array<{ asset: Asset; vaultId: string; ownerName: string; phone: string }>
+> {
+  const db = await readDb();
+  const rows = [];
+  for (const asset of db.assets) {
+    if (!asset.disputeFlag && !asset.familyAlert) continue;
+    const vault = db.vaults.find((v) => v.id === asset.vaultId);
+    const owner = vault
+      ? db.users.find((u) => u.id === vault.ownerId)
+      : undefined;
+    rows.push({
+      asset,
+      vaultId: asset.vaultId,
+      ownerName: owner?.fullName || "Unknown",
+      phone: owner?.phone || "",
+    });
+  }
+  return rows;
+}
+
+export async function listDsarRequests(): Promise<DsarRequest[]> {
+  const db = await readDb();
+  return [...db.dsarRequests].sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt),
+  );
+}
+
+export async function createDsarRequest(
+  input: Omit<DsarRequest, "id" | "createdAt" | "fulfilledAt">,
+): Promise<DsarRequest> {
+  const db = await readDb();
+  const row: DsarRequest = {
+    id: newId(),
+    ...input,
+    createdAt: new Date().toISOString(),
+    fulfilledAt: input.status === "fulfilled" ? new Date().toISOString() : null,
+  };
+  db.dsarRequests.push(row);
+  await writeDb(db);
+  return row;
+}
+
+export async function updateDsarRequest(input: {
+  id: string;
+  status: DsarStatus;
+  notes?: string;
+}): Promise<DsarRequest | undefined> {
+  const db = await readDb();
+  const row = db.dsarRequests.find((d) => d.id === input.id);
+  if (!row) return undefined;
+  row.status = input.status;
+  if (typeof input.notes === "string") row.notes = input.notes;
+  if (input.status === "fulfilled") row.fulfilledAt = new Date().toISOString();
+  await writeDb(db);
+  return row;
+}
+
+export async function listMarketingLeads(): Promise<MarketingLead[]> {
+  const db = await readDb();
+  return [...db.marketingLeads].sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt),
+  );
+}
+
+export async function updateUserDiasporaProfile(
+  userId: string,
+  input: {
+    diasporaNationalId?: string;
+    ecitizenId?: string;
+    ardhiSasaId?: string;
+    passportNumber?: string;
+    passportCountry?: string;
+    countryOfResidence?: string;
+    isDiaspora?: boolean;
+  },
+): Promise<User | null> {
+  const db = await readDb();
+  const user = db.users.find((u) => u.id === userId);
+  if (!user) return null;
+  if (typeof input.diasporaNationalId === "string") {
+    user.diasporaNationalId = input.diasporaNationalId.trim();
+  }
+  if (typeof input.ecitizenId === "string") user.ecitizenId = input.ecitizenId.trim();
+  if (typeof input.ardhiSasaId === "string") user.ardhiSasaId = input.ardhiSasaId.trim();
+  if (typeof input.passportNumber === "string") {
+    user.passportNumber = input.passportNumber.trim();
+  }
+  if (typeof input.passportCountry === "string") {
+    user.passportCountry = input.passportCountry.trim();
+  }
+  if (typeof input.countryOfResidence === "string") {
+    user.countryOfResidence = input.countryOfResidence.trim();
+  }
+  if (typeof input.isDiaspora === "boolean") user.isDiaspora = input.isDiaspora;
+  if (
+    user.countryOfResidence &&
+    user.countryOfResidence.toLowerCase() !== "kenya"
+  ) {
+    user.isDiaspora = true;
+  }
+  await writeDb(db);
+  return user;
+}
+
+export async function updateElderIdentity(input: {
+  userId: string;
+  fullName?: string;
+  nationalId?: string;
+}): Promise<User | null> {
+  const db = await readDb();
+  const user = db.users.find((u) => u.id === input.userId);
+  if (!user) return null;
+  const name = input.fullName?.trim();
+  if (name && name.length >= 2) user.fullName = name;
+  const nationalId = input.nationalId?.trim();
+  if (nationalId) user.diasporaNationalId = nationalId;
+  await writeDb(db);
+  return user;
+}
+
+export async function listHouseholdHouses(
+  vaultId: string,
+): Promise<HouseholdHouse[]> {
+  const db = await readDb();
+  return db.householdHouses.filter((h) => h.vaultId === vaultId);
+}
+
+export async function saveHouseholdHouse(input: {
+  id?: string;
+  vaultId: string;
+  houseLabel: string;
+  wifeName: string;
+  notes: string;
+  allocatedAssetIds: string[];
+}): Promise<HouseholdHouse> {
+  const db = await readDb();
+  const now = new Date().toISOString();
+  if (input.id) {
+    const existing = db.householdHouses.find(
+      (h) => h.id === input.id && h.vaultId === input.vaultId,
+    );
+    if (existing) {
+      existing.houseLabel = input.houseLabel.trim();
+      existing.wifeName = input.wifeName.trim();
+      existing.notes = input.notes.trim();
+      existing.allocatedAssetIds = input.allocatedAssetIds;
+      existing.updatedAt = now;
+      await writeDb(db);
+      return existing;
+    }
+  }
+  const created: HouseholdHouse = {
+    id: newId(),
+    vaultId: input.vaultId,
+    houseLabel: input.houseLabel.trim(),
+    wifeName: input.wifeName.trim(),
+    notes: input.notes.trim(),
+    allocatedAssetIds: input.allocatedAssetIds,
+    createdAt: now,
+    updatedAt: now,
+  };
+  db.householdHouses.push(created);
+  await writeDb(db);
+  return created;
+}
+
+export async function deleteHouseholdHouse(
+  vaultId: string,
+  houseId: string,
+): Promise<boolean> {
+  const db = await readDb();
+  const before = db.householdHouses.length;
+  db.householdHouses = db.householdHouses.filter(
+    (h) => !(h.vaultId === vaultId && h.id === houseId),
+  );
+  for (const heir of db.beneficiaries) {
+    if (heir.vaultId === vaultId && heir.houseId === houseId) heir.houseId = null;
+  }
+  if (db.householdHouses.length === before) return false;
+  await writeDb(db);
+  return true;
+}
+
+function consensusRoleForUser(input: {
+  user: User;
+  vault: Vault;
+  asAgent: boolean;
+  plan: ExecutionPlan | undefined;
+  heirs: Beneficiary[];
+}): ConsensusSignerRole | null {
+  if (input.user.id === input.vault.ownerId) return "settlor";
+  const phone = input.user.phone;
+  if (
+    input.plan?.enforcer?.phone &&
+    phonesEqual(input.plan.enforcer.phone, phone)
+  ) {
+    return "enforcer";
+  }
+  if (
+    (input.plan?.trustees || []).some((t) => phonesEqual(t.phone, phone))
+  ) {
+    return "trustee";
+  }
+  if (input.heirs.some((h) => h.phone && phonesEqual(h.phone, phone))) {
+    return "heir";
+  }
+  if (input.asAgent) return "family_rep";
+  return null;
+}
+
+export async function listConsensusProposals(
+  vaultId: string,
+): Promise<ConsensusProposal[]> {
+  const db = await readDb();
+  return db.consensusProposals
+    .filter((p) => p.vaultId === vaultId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function createConsensusProposal(input: {
+  vaultId: string;
+  kind: ConsensusProposalKind;
+  title: string;
+  summary: string;
+  payload: Record<string, unknown>;
+  proposedByUserId: string;
+  requiredApprovals?: number;
+}): Promise<ConsensusProposal> {
+  const db = await readDb();
+  const plan = db.executionPlans.find((p) => p.vaultId === input.vaultId);
+  const row: ConsensusProposal = {
+    id: newId(),
+    vaultId: input.vaultId,
+    kind: input.kind,
+    title: input.title.trim(),
+    summary: input.summary.trim(),
+    payload: input.payload,
+    proposedByUserId: input.proposedByUserId,
+    requiredApprovals:
+      input.requiredApprovals ||
+      plan?.minCoSignApprovals ||
+      2,
+    status: "open",
+    signatures: [],
+    createdAt: new Date().toISOString(),
+    resolvedAt: null,
+  };
+  db.consensusProposals.push(row);
+  await writeDb(db);
+  return row;
+}
+
+export async function signConsensusProposal(input: {
+  proposalId: string;
+  vaultId: string;
+  userId: string;
+  asAgent: boolean;
+}): Promise<{ proposal: ConsensusProposal; error?: string }> {
+  const db = await readDb();
+  const proposal = db.consensusProposals.find(
+    (p) => p.id === input.proposalId && p.vaultId === input.vaultId,
+  );
+  if (!proposal) return { proposal: proposal as unknown as ConsensusProposal, error: "Proposal not found." };
+  if (proposal.status !== "open") {
+    return { proposal, error: "This proposal is no longer open for signatures." };
+  }
+  if (proposal.signatures.some((s) => s.userId === input.userId)) {
+    return { proposal, error: "You have already signed this proposal." };
+  }
+  const user = db.users.find((u) => u.id === input.userId);
+  const vault = db.vaults.find((v) => v.id === input.vaultId);
+  if (!user || !vault) return { proposal, error: "Vault or signer not found." };
+  const plan = db.executionPlans.find((p) => p.vaultId === input.vaultId);
+  const heirs = db.beneficiaries.filter((b) => b.vaultId === input.vaultId);
+  const role = consensusRoleForUser({
+    user,
+    vault,
+    asAgent: input.asAgent,
+    plan,
+    heirs,
+  });
+  if (!role) {
+    return {
+      proposal,
+      error: "Only the settlor, a named trustee, the enforcer, an heir, or a family agent can co-sign.",
+    };
+  }
+  proposal.signatures.push({
+    userId: user.id,
+    signerName: user.fullName,
+    signerPhone: user.phone,
+    role,
+    signedAt: new Date().toISOString(),
+  });
+  if (proposal.signatures.length >= proposal.requiredApprovals) {
+    proposal.status = "approved";
+    proposal.resolvedAt = new Date().toISOString();
+  }
+  await writeDb(db);
+  return { proposal };
+}
+
+export async function executeConsensusProposal(input: {
+  proposalId: string;
+  vaultId: string;
+  userId: string;
+}): Promise<{ proposal: ConsensusProposal; buyout?: BuyoutOffer; error?: string }> {
+  const db = await readDb();
+  const proposal = db.consensusProposals.find(
+    (p) => p.id === input.proposalId && p.vaultId === input.vaultId,
+  );
+  if (!proposal) {
+    return { proposal: proposal as unknown as ConsensusProposal, error: "Proposal not found." };
+  }
+  if (proposal.status !== "approved") {
+    return { proposal, error: "Need dual-signature approval before this action is logged." };
+  }
+  const vault = db.vaults.find((v) => v.id === input.vaultId);
+  if (!vault) return { proposal, error: "Vault not found." };
+  const now = new Date().toISOString();
+  let buyout: BuyoutOffer | undefined;
+  if (proposal.kind === "amend_trust") {
+    const payload = proposal.payload as Partial<TrustDraft>;
+    vault.trustDraft = {
+      trustName: String(payload.trustName || vault.trustDraft?.trustName || ""),
+      primaryTrustee: String(
+        payload.primaryTrustee || vault.trustDraft?.primaryTrustee || "",
+      ),
+      coTrustee: String(payload.coTrustee || vault.trustDraft?.coTrustee || ""),
+      titleNumbers: String(
+        payload.titleNumbers || vault.trustDraft?.titleNumbers || "",
+      ),
+      conditions: String(payload.conditions || vault.trustDraft?.conditions || ""),
+      enforcerName: String(
+        payload.enforcerName || vault.trustDraft?.enforcerName || "",
+      ),
+      enforcerPhone: String(
+        payload.enforcerPhone || vault.trustDraft?.enforcerPhone || "",
+      ),
+      enforcerIdNumber: String(
+        payload.enforcerIdNumber || vault.trustDraft?.enforcerIdNumber || "",
+      ),
+      enforcerOrganization: String(
+        payload.enforcerOrganization || vault.trustDraft?.enforcerOrganization || "",
+      ),
+      minCoSignApprovals:
+        typeof payload.minCoSignApprovals === "number"
+          ? payload.minCoSignApprovals
+          : vault.trustDraft?.minCoSignApprovals || 2,
+      over75OrFrail: Boolean(vault.trustDraft?.over75OrFrail),
+      medicalCapacityAttached: Boolean(vault.trustDraft?.medicalCapacityAttached),
+      medicalCapacityDocumentName: vault.trustDraft?.medicalCapacityDocumentName ?? null,
+      medicalCapacityDocumentPath: vault.trustDraft?.medicalCapacityDocumentPath ?? null,
+      medicalCapacityUploadedAt: vault.trustDraft?.medicalCapacityUploadedAt ?? null,
+      updatedAt: now,
+    };
+    vault.updatedAt = now;
+  }
+  if (proposal.kind === "liquidate_share") {
+    const sellerBeneficiaryId = String(proposal.payload.sellerBeneficiaryId || "");
+    const sharePercent = Number(proposal.payload.sharePercent) || 0;
+    const askingPriceKes = Number(proposal.payload.askingPriceKes) || 0;
+    const assetId = proposal.payload.assetId
+      ? String(proposal.payload.assetId)
+      : null;
+    const windowDays = Number(proposal.payload.windowDays) || 14;
+    const ends = new Date();
+    ends.setDate(ends.getDate() + windowDays);
+    buyout = {
+      id: newId(),
+      vaultId: input.vaultId,
+      proposalId: proposal.id,
+      sellerBeneficiaryId,
+      assetId,
+      sharePercent,
+      askingPriceKes,
+      status: "open",
+      windowEndsAt: ends.toISOString(),
+      responses: [],
+      acceptedByBeneficiaryId: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    db.buyoutOffers.push(buyout);
+  }
+  proposal.status = "executed";
+  proposal.resolvedAt = now;
+  await writeDb(db);
+  return { proposal, buyout };
+}
+
+export async function rejectConsensusProposal(input: {
+  proposalId: string;
+  vaultId: string;
+}): Promise<ConsensusProposal | null> {
+  const db = await readDb();
+  const proposal = db.consensusProposals.find(
+    (p) => p.id === input.proposalId && p.vaultId === input.vaultId,
+  );
+  if (!proposal || proposal.status !== "open") return proposal || null;
+  proposal.status = "rejected";
+  proposal.resolvedAt = new Date().toISOString();
+  await writeDb(db);
+  return proposal;
+}
+
+export async function listBuyoutOffers(vaultId: string): Promise<BuyoutOffer[]> {
+  const db = await readDb();
+  const now = Date.now();
+  let dirty = false;
+  for (const offer of db.buyoutOffers) {
+    if (offer.vaultId !== vaultId) continue;
+    if (offer.status === "open" && new Date(offer.windowEndsAt).getTime() < now) {
+      offer.status = "open_market";
+      offer.updatedAt = new Date().toISOString();
+      dirty = true;
+    }
+  }
+  if (dirty) await writeDb(db);
+  return db.buyoutOffers
+    .filter((o) => o.vaultId === vaultId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function createBuyoutOffer(input: {
+  vaultId: string;
+  proposalId?: string | null;
+  sellerBeneficiaryId: string;
+  assetId: string | null;
+  sharePercent: number;
+  askingPriceKes: number;
+  windowDays?: number;
+}): Promise<BuyoutOffer> {
+  const db = await readDb();
+  const now = new Date();
+  const ends = new Date(now);
+  ends.setDate(ends.getDate() + (input.windowDays || 14));
+  const offer: BuyoutOffer = {
+    id: newId(),
+    vaultId: input.vaultId,
+    proposalId: input.proposalId || null,
+    sellerBeneficiaryId: input.sellerBeneficiaryId,
+    assetId: input.assetId,
+    sharePercent: input.sharePercent,
+    askingPriceKes: input.askingPriceKes,
+    status: "open",
+    windowEndsAt: ends.toISOString(),
+    responses: [],
+    acceptedByBeneficiaryId: null,
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
+  };
+  db.buyoutOffers.push(offer);
+  await writeDb(db);
+  return offer;
+}
+
+export async function respondToBuyout(input: {
+  offerId: string;
+  vaultId: string;
+  beneficiaryId: string;
+  responderName: string;
+  decision: "accept" | "decline";
+  offerKes: number | null;
+}): Promise<{ offer: BuyoutOffer | null; error?: string }> {
+  const db = await readDb();
+  const offer = db.buyoutOffers.find(
+    (o) => o.id === input.offerId && o.vaultId === input.vaultId,
+  );
+  if (!offer) return { offer: null, error: "Buyout offer not found." };
+  if (offer.status !== "open") {
+    return { offer, error: "This first-right window is closed." };
+  }
+  if (new Date(offer.windowEndsAt).getTime() < Date.now()) {
+    offer.status = "open_market";
+    offer.updatedAt = new Date().toISOString();
+    await writeDb(db);
+    return { offer, error: "The family window expired. Share may be offered outside." };
+  }
+  if (offer.sellerBeneficiaryId === input.beneficiaryId) {
+    return { offer, error: "The selling heir cannot buy their own share." };
+  }
+  offer.responses = offer.responses.filter(
+    (r) => r.beneficiaryId !== input.beneficiaryId,
+  );
+  offer.responses.push({
+    beneficiaryId: input.beneficiaryId,
+    responderName: input.responderName,
+    decision: input.decision,
+    offerKes: input.offerKes,
+    createdAt: new Date().toISOString(),
+  });
+  if (input.decision === "accept") {
+    const bid = input.offerKes ?? offer.askingPriceKes;
+    if (bid >= offer.askingPriceKes) {
+      offer.status = "family_accepted";
+      offer.acceptedByBeneficiaryId = input.beneficiaryId;
+    }
+  }
+  offer.updatedAt = new Date().toISOString();
+  await writeDb(db);
+  return { offer };
+}
+
+export async function listPaymentCheckouts(
+  vaultId: string,
+): Promise<PaymentCheckout[]> {
+  const db = await readDb();
+  return db.paymentCheckouts
+    .filter((c) => c.vaultId === vaultId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function listAllPaymentCheckouts(): Promise<PaymentCheckout[]> {
+  const db = await readDb();
+  return [...db.paymentCheckouts].sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt),
+  );
+}
+
+function billingKindFromCheckout(kind: CheckoutKind): BillingKind {
+  if (kind === "amendment") return "amendment_submitted";
+  if (kind === "review") return "review_submitted";
+  if (kind === "title_lookup") return "title_lookup";
+  if (kind === "estate_maintenance") return "estate_maintenance";
+  return "advocate_fee";
+}
+
+export async function createPaymentCheckout(input: {
+  vaultId: string;
+  actorUserId: string;
+  kind: CheckoutKind;
+  currency: CheckoutCurrency;
+  amount: number;
+  mpesaPhone?: string;
+  detail?: string;
+}): Promise<PaymentCheckout> {
+  const db = await readDb();
+  const now = new Date().toISOString();
+  const amountKes = toKesEquivalent(input.amount, input.currency);
+  const reference = `ST${newId().replace(/-/g, "").slice(0, 10).toUpperCase()}`;
+  const detail =
+    input.detail ||
+    `${input.kind.replace(/_/g, " ")} · ${input.currency} ${input.amount}`;
+  const preferredProvider: CheckoutProvider =
+    input.currency === "KES" ? "mpesa" : "stripe";
+  const checkout: PaymentCheckout = {
+    id: newId(),
+    vaultId: input.vaultId,
+    actorUserId: input.actorUserId,
+    kind: input.kind,
+    currency: input.currency,
+    amount: input.amount,
+    amountKesEquivalent: amountKes,
+    provider: "queued",
+    status: "pending",
+    mpesaPhone: input.mpesaPhone || "",
+    mpesaReceipt: null,
+    stripeSessionId: null,
+    reference,
+    detail,
+    gatewayNote: "",
+    createdAt: now,
+    updatedAt: now,
+  };
+  try {
+    const attempt = await attemptCheckoutGateway({
+      currency: input.currency,
+      amount: input.amount,
+      amountKes,
+      phone: input.mpesaPhone || "",
+      reference,
+      detail,
+    });
+    checkout.provider =
+      attempt.provider === "queued" ? preferredProvider : attempt.provider;
+    checkout.status =
+      attempt.status === "initiated"
+        ? "initiated"
+        : attempt.status === "failed"
+          ? "queued"
+          : "queued";
+    checkout.gatewayNote = attempt.note;
+    checkout.stripeSessionId = attempt.stripeSessionId;
+    checkout.mpesaReceipt = attempt.mpesaReceipt;
+  } catch {
+    checkout.provider = preferredProvider;
+    checkout.status = "queued";
+    checkout.gatewayNote =
+      "Gateway attempt failed; checkout recorded so ops can collect payment.";
+  }
+  db.paymentCheckouts.push(checkout);
+  db.billingRecords.push({
+    id: newId(),
+    vaultId: input.vaultId,
+    actorUserId: input.actorUserId,
+    kind: billingKindFromCheckout(input.kind),
+    detail: `${detail} · ${checkout.provider} ${checkout.status}`,
+    amountKes,
+    currency: input.currency,
+    provider: checkout.provider,
+    paid: false,
+    paidAt: null,
+    paidByUserId: null,
+    relatedId: checkout.id,
+    createdAt: now,
+  });
+  await writeDb(db);
+  return checkout;
+}
+
+export async function setPaymentCheckoutPaid(
+  id: string,
+  paidByUserId: string,
+): Promise<PaymentCheckout | null> {
+  const db = await readDb();
+  const row = db.paymentCheckouts.find((c) => c.id === id);
+  if (!row) return null;
+  row.status = "paid";
+  row.updatedAt = new Date().toISOString();
+  for (const bill of db.billingRecords) {
+    if (bill.relatedId === id) {
+      bill.paid = true;
+      bill.paidAt = row.updatedAt;
+      bill.paidByUserId = paidByUserId;
+    }
+  }
+  await writeDb(db);
+  return row;
+}
+

@@ -1,8 +1,7 @@
 import { createHash } from "crypto";
-import { promises as fs } from "fs";
 import path from "path";
 import PDFDocument from "pdfkit";
-import { PDFDocument as PdfLibDocument } from "pdf-lib";
+import { PDFDocument as PdfLibDocument, rgb, degrees, StandardFonts } from "pdf-lib";
 import type {
   Allocation,
   Asset,
@@ -17,7 +16,6 @@ import type {
 } from "@/lib/db/types";
 import {
   addAudit,
-  bindersDir,
   createVaultBinderGenerating,
   failVaultBinder,
   finalizeVaultBinder,
@@ -31,13 +29,17 @@ import {
   listBeneficiaries,
   listLegalDocumentsForReview,
   listTitleLookups,
+  readStoredFile,
   resetVaultBinderGenerating,
-  resolveStoredFilePath,
   getVaultById,
   getVaultBinder,
+  writeStoredFile,
 } from "@/lib/db/store";
 import { spokenLanguageLabel } from "@/lib/languages";
 import { registerBinderFonts } from "@/lib/binder/fonts";
+import { ardhisasaStatusLabel, lookupParcelSummary } from "@/lib/land-registry/verification";
+import { landOwnershipLabel } from "@/lib/legal/ownership";
+import { legalDocumentStatusLabel } from "@/lib/legal/attestation";
 
 type Snapshot = {
   vault: Vault;
@@ -59,7 +61,8 @@ type Snapshot = {
 
 type Attachment = {
   label: string;
-  absolutePath: string;
+  bytes: Buffer;
+  filename: string;
   kind: "image" | "pdf" | "other";
 };
 
@@ -70,27 +73,31 @@ function detectKind(filePath: string): Attachment["kind"] {
   return "other";
 }
 
-async function fileExists(filePath: string): Promise<boolean> {
-  try {
-    await fs.access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 async function collectAttachments(snapshot: Snapshot): Promise<Attachment[]> {
   const out: Attachment[] = [];
 
   const push = async (label: string, stored: string | null | undefined) => {
     if (!stored) return;
-    const absolutePath = resolveStoredFilePath(stored);
-    if (!(await fileExists(absolutePath))) return;
-    out.push({ label, absolutePath, kind: detectKind(absolutePath) });
+    const bytes = await readStoredFile(stored);
+    if (!bytes) return;
+    out.push({
+      label,
+      bytes,
+      filename: stored,
+      kind: detectKind(stored),
+    });
   };
 
   await push("National ID — front", snapshot.owner.idFrontPath);
   await push("National ID — back", snapshot.owner.idBackPath);
+  await push(
+    "Doctor’s certificate of capacity — will",
+    snapshot.vault.willDraft?.medicalCapacityDocumentPath,
+  );
+  await push(
+    "Doctor’s certificate of capacity — trust",
+    snapshot.vault.trustDraft?.medicalCapacityDocumentPath,
+  );
 
   for (const asset of snapshot.assets) {
     await push(`Asset deed — ${asset.title}`, asset.documentPath);
@@ -175,6 +182,10 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
     line("Email", snapshot.owner.email || "—");
     line("County", snapshot.owner.county || "—");
     line("Address", snapshot.owner.address || "—");
+    line("Year of birth", snapshot.owner.birthYear ? String(snapshot.owner.birthYear) : "—");
+    if (snapshot.vault.physicalDocumentLocation) {
+      line("Physical document location", snapshot.vault.physicalDocumentLocation);
+    }
     line("Profile complete", snapshot.owner.profileComplete ? "Yes" : "No");
 
     // Assets
@@ -195,6 +206,9 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
       }
       if (asset.landRegistryOffice) {
         line("County land registry", asset.landRegistryOffice);
+      }
+      if (asset.landOwnershipType) {
+        line("Ownership type", landOwnershipLabel(asset.landOwnershipType));
       }
       if (asset.county) line("County", asset.county);
       if (asset.subCounty) line("Sub-county", asset.subCounty);
@@ -220,6 +234,13 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
         }
       }
       if (asset.notes) line("Notes", asset.notes);
+      if (asset.disputeFlag || asset.familyAlert) {
+        line(
+          "Protection flag",
+          asset.disputeFlag ? "Active dispute / caveat" : "Family unauthorized-sale alert",
+        );
+        if (asset.disputeNotes) line("Alert notes", asset.disputeNotes);
+      }
       if (asset.documentName) line("Attached deed", asset.documentName);
     }
 
@@ -259,6 +280,72 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
       );
     }
 
+    h("4b. Will, trust & burial drafts");
+    if (snapshot.vault.willDraft) {
+      const will = snapshot.vault.willDraft;
+      doc.font(fonts.bold).text("Will builder");
+      doc.font(fonts.regular);
+      line("Testator", will.testatorName);
+      line("ID", will.testatorId);
+      line("Residence", will.primaryResidence);
+      line("Executor", `${will.executorName} ${will.executorPhone}`.trim());
+      line("Alt executor", `${will.altExecutorName} ${will.altExecutorPhone}`.trim());
+      line("Guardian", `${will.guardianName} ${will.guardianPhone}`.trim());
+      line(
+        "Section 11 witnesses",
+        will.witnessAcknowledged ? "Acknowledged" : "Not yet acknowledged",
+      );
+      if (will.notes) line("Notes", will.notes);
+      if (will.over75OrFrail) {
+        line("75+ / frail", "Acknowledged");
+      }
+      line(
+        "Capacity certificate",
+        will.medicalCapacityAttached
+          ? will.medicalCapacityDocumentName || "Attached"
+          : "Not attached",
+      );
+      if (will.disinheritanceExplanation) {
+        line("Disinheritance explanation", will.disinheritanceExplanation);
+      }
+      if (will.testamentaryTrustEnabled) {
+        line("Testamentary trust", `Until age ${will.testamentaryTrustUntilAge || 18}`);
+        if (will.testamentaryTrustTerms) line("Trust terms", will.testamentaryTrustTerms);
+      }
+    } else {
+      doc.text("No will builder draft.");
+    }
+    doc.moveDown(0.4);
+    if (snapshot.vault.trustDraft) {
+      const trust = snapshot.vault.trustDraft;
+      doc.font(fonts.bold).text("Family land trust");
+      doc.font(fonts.regular);
+      line("Trust name", trust.trustName);
+      line("Primary trustee", trust.primaryTrustee);
+      line("Co-trustee", trust.coTrustee);
+      if (trust.enforcerName) line("Enforcer", trust.enforcerName);
+      line("Title numbers", trust.titleNumbers);
+      if (trust.conditions) line("Conditions", trust.conditions);
+    } else {
+      doc.text("No family trust draft.");
+    }
+    doc.moveDown(0.4);
+    if (snapshot.vault.burialWishes) {
+      const wishes = snapshot.vault.burialWishes;
+      doc.font(fonts.bold).text("Burial wishes");
+      doc.font(fonts.regular);
+      line("Location", wishes.burialLocation);
+      line("Details", wishes.burialDetails);
+      line("Committee", `${wishes.committeeLead1} / ${wishes.committeeLead2}`.trim());
+      if (wishes.burialPlotTitle) line("Burial plot", wishes.burialPlotTitle);
+      if (wishes.clanEldersToInvolve) line("Clan elders", wishes.clanEldersToInvolve);
+      if (wishes.mpesaNomineePhone) line("M-Pesa nominee", wishes.mpesaNomineePhone);
+      if (wishes.saccoNomineeName) line("SACCO nominee", wishes.saccoNomineeName);
+      if (wishes.specialMessage) line("Message", wishes.specialMessage);
+    } else {
+      doc.text("No burial wishes recorded.");
+    }
+
     // Execution
     doc.addPage();
     h("5. Execution plan");
@@ -289,6 +376,17 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
       for (const t of snapshot.plan.trustees || []) {
         doc.text(
           `• ${t.fullName} · ${t.phone || "—"}${t.idNumber ? ` · ID ${t.idNumber}` : ""}`,
+        );
+      }
+      if (snapshot.plan.enforcer) {
+        doc.moveDown(0.3);
+        doc.font(fonts.bold).text("Enforcer");
+        doc.font(fonts.regular);
+        doc.text(
+          `• ${snapshot.plan.enforcer.fullName} · ${snapshot.plan.enforcer.phone || "—"}` +
+            (snapshot.plan.enforcer.organization
+              ? ` · ${snapshot.plan.enforcer.organization}`
+              : ""),
         );
       }
       doc.moveDown(0.3);
@@ -336,7 +434,7 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
       doc.moveDown(0.5);
       doc
         .font(fonts.bold)
-        .text(`${d.title} (${d.type}) — ${d.status}`)
+        .text(`${d.title} (${d.type}) — ${legalDocumentStatusLabel(d.status, d.stampedAt)}`)
         .font(fonts.regular);
       if (d.stampRef) {
         line(
@@ -361,21 +459,21 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
       if (d.documentName) line("Certified upload", d.documentName);
     }
 
-    // Title lookups
-    h("8. Title lookups");
+    // ArdhiSasa filings
+    h("8. ArdhiSasa filings");
     if (snapshot.lookups.length === 0) {
-      doc.text("No title lookups recorded.");
+      doc.text("No Ministry of Lands filings recorded. Official searches are filed by an LSK advocate after the owner authorizes by signed paper form or ArdhiSasa Notifications approval.");
     }
     for (const lookup of snapshot.lookups) {
       doc.moveDown(0.3);
-      line("Title", lookup.titleNumber);
-      line(
-        "Result",
-        lookup.result
-          ? `${lookup.result.found ? "Found" : "Not found"} · ${lookup.result.registrationStatus}`
-          : "Pending",
-      );
-      if (lookup.result?.ownerName) line("Registry owner", lookup.result.ownerName);
+      line("Parcel", lookupParcelSummary(lookup) || "—");
+      line("Verification status", ardhisasaStatusLabel(lookup.status));
+      if (lookup.documentName) {
+        line("Official certificate", `${lookup.documentName} (on file in vault)`);
+      } else {
+        line("Official certificate", "Not yet uploaded");
+      }
+      if (lookup.advocateNotes) line("Advocate notes", lookup.advocateNotes);
     }
 
     // Voice testaments
@@ -443,7 +541,7 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
           const maxWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
           const maxHeight = 360;
           if (doc.y > doc.page.height - 200) doc.addPage();
-          doc.image(att.absolutePath, {
+          doc.image(att.bytes, {
             fit: [maxWidth, maxHeight],
             align: "center",
           });
@@ -461,14 +559,14 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
 async function mergePdfAttachments(
   narrative: Buffer,
   pdfAttachments: Attachment[],
+  stamp?: { advocateName: string; lsk: string },
 ): Promise<{ buffer: Buffer; pageCount: number }> {
   const merged = await PdfLibDocument.load(narrative);
   for (const att of pdfAttachments) {
     try {
-      const bytes = await fs.readFile(att.absolutePath);
+      const bytes = att.bytes;
       const src = await PdfLibDocument.load(bytes, { ignoreEncryption: true });
       const pages = await merged.copyPages(src, src.getPageIndices());
-      // Cover page note before appended pages
       for (const page of pages) {
         merged.addPage(page);
       }
@@ -476,6 +574,46 @@ async function mergePdfAttachments(
       // Skip unreadable PDFs; narrative still lists them by name
     }
   }
+
+  const font = await merged.embedFont(StandardFonts.Helvetica);
+  for (const page of merged.getPages()) {
+    const { width, height } = page.getSize();
+    page.drawText("CONFIDENTIAL - SHAMBATRUST LEGAL DOSSIER", {
+      x: 48,
+      y: 16,
+      size: 8,
+      font,
+      color: rgb(0.45, 0.45, 0.45),
+      opacity: 0.55,
+    });
+    page.drawText("CONFIDENTIAL", {
+      x: width * 0.18,
+      y: height * 0.35,
+      size: 42,
+      font,
+      rotate: degrees(32),
+      color: rgb(0.55, 0.55, 0.55),
+      opacity: 0.12,
+    });
+    if (stamp?.lsk || stamp?.advocateName) {
+      const label = [
+        "LEGALLY ATTESTED",
+        stamp.advocateName,
+        stamp.lsk ? `LSK ${stamp.lsk}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      page.drawText(label, {
+        x: 48,
+        y: height - 22,
+        size: 8,
+        font,
+        color: rgb(0.12, 0.34, 0.19),
+        opacity: 0.85,
+      });
+    }
+  }
+
   const buffer = Buffer.from(await merged.save());
   return { buffer, pageCount: merged.getPageCount() };
 }
@@ -551,22 +689,14 @@ async function writeBinderPdf(snapshot: Snapshot): Promise<{
   const pdfs = attachments.filter((a) => a.kind === "pdf");
 
   const narrativeBuffer = await writeNarrativePdf(snapshot, images);
-  const final =
-    pdfs.length > 0
-      ? await mergePdfAttachments(narrativeBuffer, pdfs)
-      : await (async () => {
-          const loaded = await PdfLibDocument.load(narrativeBuffer);
-          return {
-            buffer: Buffer.from(await loaded.save()),
-            pageCount: loaded.getPageCount(),
-          };
-        })();
+  const final = await mergePdfAttachments(narrativeBuffer, pdfs, {
+    advocateName: snapshot.advocateName,
+    lsk: snapshot.advocate?.advocateLicense || "",
+  });
 
-  const dir = bindersDir();
-  await fs.mkdir(dir, { recursive: true });
   const documentName = `ShambaTrust-Binder-${snapshot.owner.fullName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 40)}-v${snapshot.version}.pdf`;
-  const relativePath = `${snapshot.vault.id}-v${snapshot.version}-${Date.now()}.pdf`;
-  await fs.writeFile(path.join(dir, relativePath), final.buffer);
+  const relativePath = `binders/${snapshot.vault.id}-v${snapshot.version}-${Date.now()}.pdf`;
+  await writeStoredFile(relativePath, final.buffer, "application/pdf");
 
   const fileHash = createHash("sha256").update(final.buffer).digest("hex");
   return {
@@ -670,5 +800,8 @@ export async function regenerateFailedVaultBinder(
 }
 
 export function binderAbsolutePath(relativePath: string): string {
-  return path.join(bindersDir(), relativePath);
+  const key = relativePath.startsWith("binders/")
+    ? relativePath
+    : `binders/${relativePath}`;
+  return key;
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { LandingPhoto } from "@/components/landing-photo";
 import { useLocale } from "@/components/locale-provider";
 import { type AnswerValue, scoreAnswers } from "@/lib/audit";
 import { buildWhatsAppUrl } from "@/lib/whatsapp";
@@ -66,7 +67,25 @@ export function FamilyPeaceAudit({ compact = false }: Props) {
           <p className="mt-3 text-lg text-muted">{t.audit.subtitle}</p>
         </div>
 
-        <div className="mt-8 rounded-[0.45rem] border-2 border-border bg-surface p-5 sm:p-8">
+        <div
+          className={
+            compact
+              ? "mt-8"
+              : "mt-8 grid items-start gap-8 lg:grid-cols-[1.1fr_0.9fr]"
+          }
+        >
+          {!compact ? (
+            <LandingPhoto
+              src="/landing/family-trust.png"
+              alt={
+                locale === "sw"
+                  ? "Familia ya shamba la chai imeketi mezani nyumbani, wakiangalia karatasi pamoja"
+                  : "Tea-estate family gathered around a homestead table, reviewing papers together"
+              }
+              className="min-h-[18rem] lg:min-h-[26rem]"
+            />
+          ) : null}
+        <div className="rounded-[0.45rem] border-2 border-border bg-surface p-5 sm:p-8">
           {!started && !finished && (
             <div>
               <p className="text-lg text-ink">
@@ -172,6 +191,7 @@ export function FamilyPeaceAudit({ compact = false }: Props) {
               </div>
             </div>
           )}
+        </div>
         </div>
       </div>
     </section>

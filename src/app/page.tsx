@@ -3,14 +3,19 @@ import { FamilyPeaceAudit } from "@/components/family-peace-audit";
 import { FloatingWhatsApp } from "@/components/floating-whatsapp";
 import { Hero } from "@/components/hero";
 import { HowItWorks } from "@/components/how-it-works";
+import { KenyaFaq } from "@/components/kenya-faq";
 import { LeadCapture } from "@/components/lead-capture";
 import { OnboardingJourney } from "@/components/onboarding-journey";
 import { Pricing } from "@/components/pricing";
 import { ProblemSolution } from "@/components/problem-solution";
+import { SecurityInDepth } from "@/components/security-in-depth";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { SuccessStories } from "@/components/success-stories";
 import { TrustSignals } from "@/components/trust-signals";
+import { WillVsTrust } from "@/components/will-vs-trust";
+
+export const dynamic = "force-dynamic";
 
 export default function Home() {
   return (
@@ -23,6 +28,9 @@ export default function Home() {
         <OnboardingJourney />
         <SuccessStories />
         <FamilyPeaceAudit />
+        <WillVsTrust />
+        <KenyaFaq />
+        <SecurityInDepth />
         <TrustSignals />
         <Pricing />
         <section className="border-t border-border py-14">

@@ -1,8 +1,6 @@
-import { promises as fs } from "fs";
 import { NextResponse } from "next/server";
-import { binderAbsolutePath } from "@/lib/binder/generate";
 import { requireAdminAccess } from "@/lib/secure-docs/access";
-import { addAudit, getVaultBinder } from "@/lib/db/store";
+import { addAudit, getVaultBinder, readStoredFile } from "@/lib/db/store";
 
 type Params = { params: Promise<{ binderId: string }> };
 
@@ -25,16 +23,25 @@ export async function GET(_request: Request, { params }: Params) {
     );
   }
 
-  const absolute = binderAbsolutePath(binder.documentPath);
+  const bytes = await readStoredFile(
+    binder.documentPath.startsWith("binders/")
+      ? binder.documentPath
+      : `binders/${binder.documentPath}`,
+  );
+  if (!bytes) {
+    return NextResponse.json(
+      { error: "Binder file missing on disk." },
+      { status: 404 },
+    );
+  }
   try {
-    const bytes = await fs.readFile(absolute);
     await addAudit({
       vaultId: binder.vaultId,
       actorUserId: access.session.userId,
       action: "binder_downloaded",
       detail: `Ops downloaded binder v${binder.version}`,
     });
-    return new NextResponse(bytes, {
+    return new NextResponse(new Uint8Array(bytes), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${binder.documentName.replace(/"/g, "")}"`,

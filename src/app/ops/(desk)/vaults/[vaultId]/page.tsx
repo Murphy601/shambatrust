@@ -3,6 +3,19 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { formatDuration } from "@/lib/audio";
+import { nomineeTotal, parcelIdentifiers } from "@/lib/asset-fields";
+import { ardhisasaStatusLabel, lookupParcelSummary } from "@/lib/land-registry/verification";
+import type {
+  Allocation,
+  Asset,
+  Beneficiary,
+  ExecutionPlan,
+  LegalDocument,
+  ReviewRequest,
+  TitleLookupRecord,
+  Vault,
+} from "@/lib/db/types";
 
 type BinderRow = {
   id: string;
@@ -20,41 +33,58 @@ type BinderRow = {
 };
 
 type VaultDetail = {
-  vault: {
-    id: string;
-    status: string;
-    packageTier: string | null;
-    forceLocked?: boolean;
-    opsNotes?: string;
-  };
+  vault: Vault;
   owner: {
     fullName: string;
     phone: string;
     email?: string | null;
     county?: string;
     address?: string;
-  } | null;
-  assets: Array<{
+    preferredLanguage?: string;
+                idOnFile?: boolean;
+                idFrontName?: string | null;
+                idBackName?: string | null;
+                isDiaspora?: boolean;
+                countryOfResidence?: string;
+                ardhiSasaId?: string;
+                passportNumber?: string;
+              } | null;
+  assets: Array<Asset & { hasDocument: boolean }>;
+  beneficiaries: Beneficiary[];
+  allocations: Allocation[];
+  reviews: ReviewRequest[];
+  documents: Array<LegalDocument & { hasFile: boolean }>;
+  lookups: TitleLookupRecord[];
+  executionPlan: ExecutionPlan | null;
+  testaments: Array<{
     id: string;
     title: string;
-    type: string;
-    titleNumber: string;
-    documentName: string | null;
-    hasDocument: boolean;
-  }>;
-  beneficiaries: Array<{ fullName: string; relationship: string; idNumber: string }>;
-  reviews: Array<{ id: string; status: string; createdAt: string; packageTier: string }>;
-  documents: Array<{
-    id: string;
-    title: string;
-    type: string;
-    status: string;
-    hasFile: boolean;
+    languageLabel: string;
+    durationSeconds: number | null;
+    transcript: string;
+    transcriptStatus: string;
+    recordedByAgent: boolean;
+    assetId: string | null;
+    createdAt: string;
   }>;
   binders: BinderRow[];
   latestBinder: BinderRow | null;
   audit: Array<{ id: string; action: string; detail: string; createdAt: string }>;
   viewReviewId: string | null;
+  houses?: Array<{
+    id: string;
+    houseLabel: string;
+    wifeName: string;
+    allocatedAssetIds: string[];
+  }>;
+  proposals?: Array<{ id: string; title: string; status: string; kind: string }>;
+  checkouts?: Array<{
+    id: string;
+    currency: string;
+    amount: number;
+    status: string;
+    provider: string;
+  }>;
 };
 
 export default function OpsVaultPage() {
@@ -133,19 +163,38 @@ export default function OpsVaultPage() {
       <Link href="/ops/elders" className="text-sm text-[#d4a574] underline">
         ← Elders
       </Link>
+      {" · "}
+      <Link href="/ops/documents" className="text-sm text-[#d4a574] underline">
+        Documents / Master Dossiers
+      </Link>
       <div>
         <h1 className="text-3xl font-semibold">
           {data.owner?.fullName || "Vault"}
         </h1>
         <p className="mt-2 text-[#9aa89c]">
-          {data.owner?.phone} · status{" "}
+          {data.owner?.phone}
+          {data.owner?.email ? ` · ${data.owner.email}` : ""}
+          {data.owner?.county ? ` · ${data.owner.county}` : ""}
+          {" · status "}
           <span className="capitalize text-[#e8efe9]">
             {data.vault.status.replace("_", " ")}
           </span>
+          {data.vault.packageTier ? ` · ${data.vault.packageTier}` : ""}
           {data.vault.forceLocked ? (
             <span className="ml-2 text-[#e07a5f]">· FORCE LOCKED</span>
           ) : null}
         </p>
+        {data.owner?.address ? (
+          <p className="mt-1 text-sm text-[#9aa89c]">{data.owner.address}</p>
+        ) : null}
+        {data.owner?.isDiaspora || data.owner?.countryOfResidence ? (
+          <p className="mt-1 text-sm text-[#d4a574]">
+            Diaspora
+            {data.owner.countryOfResidence ? ` · ${data.owner.countryOfResidence}` : ""}
+            {data.owner.ardhiSasaId ? ` · ArdhiSasa ${data.owner.ardhiSasaId}` : ""}
+            {data.owner.passportNumber ? ` · passport ${data.owner.passportNumber}` : ""}
+          </p>
+        ) : null}
       </div>
 
       {message && <p className="text-[#d4a574]">{message}</p>}
@@ -301,42 +350,137 @@ export default function OpsVaultPage() {
       </section>
 
       <section className="rounded border border-[#3d4a40] bg-[#121a16] p-5">
-        <h2 className="text-xl font-semibold">Submitted documents (view-only)</h2>
-        {!reviewId && (
-          <p className="mt-2 text-sm text-[#9aa89c]">
-            No review case yet — document viewer needs a review id. Structured
-            asset data is still below.
-          </p>
+        <h2 className="text-xl font-semibold">1. Elder identity &amp; KYC</h2>
+        <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+          <div>
+            <dt className="text-[#9aa89c]">Spoken language</dt>
+            <dd>{data.owner?.preferredLanguage || "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-[#9aa89c]">National ID</dt>
+            <dd>
+              {data.owner?.idOnFile ? "On file" : "Missing"}
+              {data.owner?.idFrontName ? ` · ${data.owner.idFrontName}` : ""}
+            </dd>
+          </div>
+        </dl>
+        {data.owner?.idOnFile && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <a
+              className="text-[#d4a574] underline"
+              href={`/api/ops/documents/file?elderId=${data.vault.ownerId}&slot=idFront&disposition=inline`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              View ID front
+            </a>
+            <a
+              className="text-[#d4a574] underline"
+              href={`/api/ops/documents/file?elderId=${data.vault.ownerId}&slot=idBack&disposition=inline`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              View ID back
+            </a>
+          </div>
         )}
-        <ul className="mt-4 space-y-3">
+      </section>
+
+      <section className="rounded border border-[#3d4a40] bg-[#121a16] p-5">
+        <h2 className="text-xl font-semibold">2. Assets register</h2>
+        <ul className="mt-4 space-y-4">
+          {data.assets.length === 0 && (
+            <li className="text-sm text-[#9aa89c]">No assets listed.</li>
+          )}
           {data.assets.map((a) => (
-            <li key={a.id} className="text-sm">
-              <span className="font-semibold">{a.title}</span> ({a.type})
-              {a.titleNumber ? ` · ${a.titleNumber}` : ""}
-              {a.hasDocument && reviewId ? (
-                <>
-                  {" · "}
+            <li key={a.id} className="border-l-2 border-[#d4a574] pl-3 text-sm">
+              <p className="font-semibold">
+                {a.title}{" "}
+                <span className="capitalize text-[#9aa89c]">
+                  ({a.type.replace(/_/g, " ")})
+                </span>
+              </p>
+              {a.county ? (
+                <p className="text-[#9aa89c]">
+                  {a.county}
+                  {a.subCounty ? ` · ${a.subCounty}` : ""}
+                  {a.landmark ? ` · ${a.landmark}` : ""}
+                </p>
+              ) : null}
+              {parcelIdentifiers(a).length > 0 && (
+                <dl className="mt-1 grid gap-x-4 sm:grid-cols-2">
+                  {parcelIdentifiers(a).map((row) => (
+                    <div key={row.label} className="flex gap-2">
+                      <dt className="text-[#9aa89c]">{row.label}:</dt>
+                      <dd className="font-semibold">{row.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+              {a.gpsLat != null && a.gpsLng != null && (
+                <p className="mt-1">
                   <a
                     className="text-[#d4a574] underline"
-                    href={`/api/secure-docs/view?kind=asset&reviewId=${reviewId}&assetId=${a.id}`}
+                    href={`https://www.google.com/maps?q=${a.gpsLat},${a.gpsLng}`}
                     target="_blank"
                     rel="noreferrer"
                   >
-                    View {a.documentName || "file"} (view only)
+                    GPS pin {a.gpsLat}, {a.gpsLng}
                   </a>
-                </>
-              ) : a.hasDocument ? (
-                <>
-                  {" · "}
+                </p>
+              )}
+              {(a.disputeFlag || a.familyAlert) && (
+                <p className="mt-1 font-semibold text-[#e07a5f]">
+                  {a.disputeFlag ? "Dispute / caveat" : "Family alert"}
+                  {a.disputeNotes ? ` — ${a.disputeNotes}` : ""}
+                </p>
+              )}
+              {a.type === "sacco" && (
+                <div className="mt-1">
+                  {a.saccoName ? (
+                    <p className="text-[#9aa89c]">
+                      SACCO: {a.saccoName}
+                      {a.saccoMemberNumber ? ` · member ${a.saccoMemberNumber}` : ""}
+                      {a.mpesaNumber ? ` · M-Pesa ${a.mpesaNumber}` : ""}
+                    </p>
+                  ) : null}
+                  {a.saccoNominees.length > 0 && (
+                    <>
+                      <p className="mt-1 font-semibold">
+                        Nominees ({nomineeTotal(a.saccoNominees)}%) — paid outside
+                        the estate
+                      </p>
+                      <ul className="mt-0.5 pl-4 text-[#9aa89c]">
+                        {a.saccoNominees.map((nominee) => (
+                          <li key={nominee.id}>
+                            {nominee.fullName}
+                            {nominee.relationship
+                              ? ` — ${nominee.relationship}`
+                              : ""}{" "}
+                            · {nominee.percentage}%
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </div>
+              )}
+              {a.notes ? <p className="mt-1 text-[#9aa89c]">{a.notes}</p> : null}
+              {a.hasDocument ? (
+                <p className="mt-1">
                   <a
                     className="text-[#d4a574] underline"
-                    href={`/api/secure-docs/view?kind=asset&vaultId=${vaultId}&assetId=${a.id}`}
+                    href={
+                      reviewId
+                        ? `/api/secure-docs/view?kind=asset&reviewId=${reviewId}&assetId=${a.id}`
+                        : `/api/secure-docs/view?kind=asset&vaultId=${vaultId}&assetId=${a.id}`
+                    }
                     target="_blank"
                     rel="noreferrer"
                   >
-                    View {a.documentName || "file"} (view only)
+                    View {a.documentName || "file"}
                   </a>
-                </>
+                </p>
               ) : null}
             </li>
           ))}
@@ -344,23 +488,231 @@ export default function OpsVaultPage() {
       </section>
 
       <section className="rounded border border-[#3d4a40] bg-[#121a16] p-5">
-        <h2 className="text-xl font-semibold">Heirs</h2>
-        <ul className="mt-3 space-y-2 text-sm">
-          {data.beneficiaries.map((b, i) => (
-            <li key={`${b.fullName}-${i}`}>
-              {b.fullName} — {b.relationship}
-              {b.idNumber ? ` · ID ${b.idNumber}` : ""}
-            </li>
-          ))}
+        <h2 className="text-xl font-semibold">3. Heirs &amp; allocations</h2>
+        <ul className="mt-3 space-y-3 text-sm">
+          {data.beneficiaries.map((b) => {
+            const shares = data.allocations.filter(
+              (allocation) => allocation.beneficiaryId === b.id,
+            );
+            return (
+              <li key={b.id}>
+                <span className="font-semibold">{b.fullName}</span> —{" "}
+                {b.relationship}
+                {b.idNumber ? ` · ID ${b.idNumber}` : ""}
+                {b.phone ? ` · ${b.phone}` : ""}
+                {shares.length > 0 && (
+                  <ul className="mt-1 pl-4 text-[#9aa89c]">
+                    {shares.map((share) => {
+                      const asset = data.assets.find((a) => a.id === share.assetId);
+                      return (
+                        <li key={share.id}>
+                          {asset?.title || share.specificGift || "Estate"}
+                          {share.percentage != null ? ` — ${share.percentage}%` : ""}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </li>
+            );
+          })}
+          {data.beneficiaries.length === 0 && (
+            <li className="text-[#9aa89c]">No heirs named.</li>
+          )}
         </ul>
       </section>
 
       <section className="rounded border border-[#3d4a40] bg-[#121a16] p-5">
-        <h2 className="text-xl font-semibold">Legal documents</h2>
+        <h2 className="text-xl font-semibold">4. Will, trust &amp; burial drafts</h2>
+        <div className="mt-3 grid gap-4 text-sm lg:grid-cols-3">
+          <div>
+            <p className="font-semibold text-[#d4a574]">Will builder</p>
+            {data.vault.willDraft ? (
+              <ul className="mt-2 space-y-1 text-[#e8efe9]">
+                <li>Testator: {data.vault.willDraft.testatorName || "—"}</li>
+                <li>Executor: {data.vault.willDraft.executorName || "—"}</li>
+                <li>Guardian: {data.vault.willDraft.guardianName || "—"}</li>
+                <li>
+                  Witnesses:{" "}
+                  {data.vault.willDraft.witnessAcknowledged
+                    ? "Section 11 acknowledged"
+                    : "Not yet acknowledged"}
+                </li>
+                {data.vault.willDraft.testamentaryTrustEnabled ? (
+                  <li className="text-[#86efac]">Testamentary trust for minors on</li>
+                ) : null}
+              </ul>
+            ) : (
+              <p className="mt-2 text-[#9aa89c]">No will draft yet.</p>
+            )}
+          </div>
+          <div>
+            <p className="font-semibold text-[#d4a574]">Family land trust</p>
+            {data.vault.trustDraft ? (
+              <ul className="mt-2 space-y-1 text-[#e8efe9]">
+                <li>{data.vault.trustDraft.trustName || "Unnamed trust"}</li>
+                <li>Trustee: {data.vault.trustDraft.primaryTrustee || "—"}</li>
+                <li>Co-trustee: {data.vault.trustDraft.coTrustee || "—"}</li>
+                {data.vault.trustDraft.titleNumbers ? (
+                  <li className="whitespace-pre-wrap">
+                    LR: {data.vault.trustDraft.titleNumbers}
+                  </li>
+                ) : null}
+                {data.vault.trustDraft.enforcerName ? (
+                  <li>Enforcer: {data.vault.trustDraft.enforcerName}</li>
+                ) : null}
+              </ul>
+            ) : (
+              <p className="mt-2 text-[#9aa89c]">No trust draft yet.</p>
+            )}
+          </div>
+          <div>
+            <p className="font-semibold text-[#d4a574]">Burial wishes</p>
+            {data.vault.burialWishes ? (
+              <ul className="mt-2 space-y-1 text-[#e8efe9]">
+                <li className="capitalize">
+                  {data.vault.burialWishes.burialLocation}
+                </li>
+                {data.vault.burialWishes.burialDetails ? (
+                  <li>{data.vault.burialWishes.burialDetails}</li>
+                ) : null}
+                <li>
+                  Committee: {data.vault.burialWishes.committeeLead1 || "—"}
+                  {data.vault.burialWishes.committeeLead2
+                    ? ` / ${data.vault.burialWishes.committeeLead2}`
+                    : ""}
+                </li>
+                {data.vault.burialWishes.clanEldersToInvolve ? (
+                  <li>Clan elders: {data.vault.burialWishes.clanEldersToInvolve}</li>
+                ) : null}
+                {data.vault.burialWishes.mpesaNomineePhone ? (
+                  <li>M-Pesa nominee: {data.vault.burialWishes.mpesaNomineePhone}</li>
+                ) : null}
+              </ul>
+            ) : (
+              <p className="mt-2 text-[#9aa89c]">No burial wishes yet.</p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded border border-[#3d4a40] bg-[#121a16] p-5">
+        <h2 className="text-xl font-semibold">4b. Houses, consensus &amp; checkout</h2>
+        <div className="mt-3 grid gap-4 text-sm lg:grid-cols-3">
+          <div>
+            <p className="font-semibold text-[#d4a574]">Section 40 houses</p>
+            <ul className="mt-2 space-y-1 text-[#e8efe9]">
+              {(data.houses || []).map((h) => (
+                <li key={h.id}>
+                  {h.houseLabel}
+                  {h.wifeName ? ` · ${h.wifeName}` : ""}
+                </li>
+              ))}
+              {(data.houses || []).length === 0 && (
+                <li className="text-[#9aa89c]">No polygamous houses.</li>
+              )}
+            </ul>
+          </div>
+          <div>
+            <p className="font-semibold text-[#d4a574]">Consensus</p>
+            <ul className="mt-2 space-y-1 text-[#e8efe9]">
+              {(data.proposals || []).slice(0, 6).map((p) => (
+                <li key={p.id}>
+                  {p.kind.replace(/_/g, " ")} · {p.status}
+                </li>
+              ))}
+              {(data.proposals || []).length === 0 && (
+                <li className="text-[#9aa89c]">No co-sign proposals.</li>
+              )}
+            </ul>
+          </div>
+          <div>
+            <p className="font-semibold text-[#d4a574]">Checkouts</p>
+            <ul className="mt-2 space-y-1 text-[#e8efe9]">
+              {(data.checkouts || []).slice(0, 6).map((c) => (
+                <li key={c.id}>
+                  {c.currency} {c.amount} · {c.provider} · {c.status}
+                </li>
+              ))}
+              {(data.checkouts || []).length === 0 && (
+                <li className="text-[#9aa89c]">No diaspora checkouts.</li>
+              )}
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded border border-[#3d4a40] bg-[#121a16] p-5">
+        <h2 className="text-xl font-semibold">5. Execution plan</h2>
+        {!data.executionPlan ? (
+          <p className="mt-3 text-sm text-[#9aa89c]">No execution plan on file.</p>
+        ) : (
+          <div className="mt-3 space-y-3 text-sm">
+            <p>
+              Trigger {data.executionPlan.triggerType.replace(/_/g, " ")} · min{" "}
+              {data.executionPlan.minTrusteeApprovals} trustee
+              {data.executionPlan.minGuardianApprovals
+                ? ` · min ${data.executionPlan.minGuardianApprovals} guardian`
+                : ""}{" "}
+              · cooling {data.executionPlan.coolingHours}h
+            </p>
+            <p>
+              Death certificate:{" "}
+              {data.executionPlan.requireDeathCertificate ? "required" : "optional"}
+              {" · "}
+              Death notification:{" "}
+              {data.executionPlan.requireDeathNotification ? "required" : "optional"}
+            </p>
+            <div>
+              <p className="font-semibold">Trustees</p>
+              <ul className="mt-1 text-[#9aa89c]">
+                {(data.executionPlan.trustees || []).map((t) => (
+                  <li key={`${t.fullName}-${t.phone}`}>
+                    {t.fullName} · {t.phone || "—"}
+                    {t.idNumber ? ` · ID ${t.idNumber}` : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <p className="font-semibold">Enforcer</p>
+              <p className="mt-1 text-[#9aa89c]">
+                {data.executionPlan.enforcer
+                  ? `${data.executionPlan.enforcer.fullName} · ${data.executionPlan.enforcer.phone || "—"}`
+                  : "Not appointed."}
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold">Guardians (dual verification)</p>
+              <ul className="mt-1 text-[#9aa89c]">
+                {(data.executionPlan.guardians || []).length === 0 && (
+                  <li>None named.</li>
+                )}
+                {(data.executionPlan.guardians || []).map((g) => (
+                  <li key={`${g.fullName}-${g.phone}`}>
+                    {g.fullName} · {g.phone || "—"}
+                    {g.relationship ? ` · ${g.relationship}` : ""}
+                    {g.idNumber ? ` · ID ${g.idNumber}` : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="rounded border border-[#3d4a40] bg-[#121a16] p-5">
+        <h2 className="text-xl font-semibold">6. Advocate instruments</h2>
         <ul className="mt-3 space-y-2 text-sm">
           {data.documents.map((d) => (
             <li key={d.id}>
-              {d.title} · {d.type} · {d.status}
+              <span className="font-semibold">{d.title}</span>
+              {" · "}
+              <span className="capitalize">{d.type.replace(/_/g, " ")}</span>
+              {" · "}
+              {d.status.replace(/_/g, " ")}
+              {d.stampRef ? ` · stamp ${d.stampRef}` : ""}
+              {d.signatureName ? ` · signed ${d.signatureName}` : ""}
               {d.hasFile && reviewId ? (
                 <>
                   {" · "}
@@ -370,7 +722,7 @@ export default function OpsVaultPage() {
                     target="_blank"
                     rel="noreferrer"
                   >
-                    View file (view only)
+                    View file
                   </a>
                 </>
               ) : null}
@@ -380,6 +732,72 @@ export default function OpsVaultPage() {
             <li className="text-[#9aa89c]">None yet.</li>
           )}
         </ul>
+        {data.reviews[0] && (
+          <p className="mt-3 text-sm text-[#9aa89c]">
+            Latest review {data.reviews[0].packageTier} · {data.reviews[0].status}
+            {data.reviews[0].notes ? ` — ${data.reviews[0].notes}` : ""}
+          </p>
+        )}
+      </section>
+
+      <section className="rounded border border-[#3d4a40] bg-[#121a16] p-5">
+        <h2 className="text-xl font-semibold">7. ArdhiSasa filings</h2>
+        <ul className="mt-3 space-y-2 text-sm">
+          {data.lookups.map((lookup) => (
+            <li key={lookup.id}>
+              {ardhisasaStatusLabel(lookup.status)} · {lookupParcelSummary(lookup)}
+              {lookup.documentPath ? (
+                <>
+                  {" · "}
+                  <a
+                    className="text-[#d4a574] underline"
+                    href={`/api/secure-docs/view?kind=title_search&lookupId=${lookup.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    view certificate
+                  </a>
+                </>
+              ) : null}
+            </li>
+          ))}
+          {data.lookups.length === 0 && (
+            <li className="text-[#9aa89c]">No ArdhiSasa filings recorded.</li>
+          )}
+        </ul>
+      </section>
+
+      <section className="rounded border border-[#3d4a40] bg-[#121a16] p-5">
+        <h2 className="text-xl font-semibold">8. Voice testaments</h2>
+        {data.testaments.length === 0 ? (
+          <p className="mt-3 text-sm text-[#9aa89c]">No spoken statements recorded.</p>
+        ) : (
+          <ul className="mt-4 space-y-4">
+            {data.testaments.map((testament) => (
+              <li
+                key={testament.id}
+                className="rounded border border-[#3d4a40] bg-[#0f1411] p-4 text-sm"
+              >
+                <p className="font-semibold">{testament.title}</p>
+                <p className="text-[#9aa89c]">
+                  {testament.languageLabel} ·{" "}
+                  {formatDuration(testament.durationSeconds)} ·{" "}
+                  {testament.transcriptStatus.replace(/_/g, " ")}
+                  {testament.recordedByAgent ? " · captured by family agent" : ""}
+                </p>
+                <audio
+                  className="mt-3 w-full"
+                  controls
+                  preload="none"
+                  src={`/api/vault/testaments/${testament.id}/audio`}
+                />
+                {testament.transcript ? (
+                  <p className="mt-3 whitespace-pre-wrap">{testament.transcript}</p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="rounded border border-[#3d4a40] bg-[#121a16] p-5">

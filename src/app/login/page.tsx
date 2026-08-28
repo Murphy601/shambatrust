@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { useLocale } from "@/components/locale-provider";
+import { PlatformDisclaimer } from "@/components/platform-disclaimer";
 import { vaultCopy } from "@/lib/vault-copy";
 
 function LoginForm() {
@@ -104,6 +105,9 @@ function LoginForm() {
         {t.loginTitle}
       </h1>
       <p className="mt-3 text-lg text-muted">{t.loginSubtitle}</p>
+      <div className="mt-4">
+        <PlatformDisclaimer sw={sw} />
+      </div>
 
       {step === "identifier" ? (
         <form

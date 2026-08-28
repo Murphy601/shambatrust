@@ -1,4 +1,5 @@
 import type { SpokenLanguage } from "@/lib/languages";
+import type { LandOwnershipType } from "@/lib/legal/ownership";
 
 export type UserRole = "elder" | "agent" | "advocate" | "admin";
 
@@ -66,6 +67,16 @@ export type User = {
   advocateMaxCases: number | null;
   advocateOooUntil: string | null;
   advocateOooNote: string;
+  /** Diaspora Family Bridge — overseas KYC / ArdhiSasa linkage */
+  diasporaNationalId: string;
+  ecitizenId: string;
+  ardhiSasaId: string;
+  passportNumber: string;
+  passportCountry: string;
+  countryOfResidence: string;
+  isDiaspora: boolean;
+  /** Calendar year of birth — used to recommend a capacity certificate at 75+ */
+  birthYear: number | null;
   createdAt: string;
 };
 
@@ -94,6 +105,17 @@ export type Vault = {
   /** Ops force-lock — blocks elder edits even in draft */
   forceLocked: boolean;
   opsNotes: string;
+  willDraft: WillDraft | null;
+  trustDraft: TrustDraft | null;
+  burialWishes: BurialWishes | null;
+  /** Where the family keeps the paper originals (safe, tin box, bank) */
+  physicalDocumentLocation: string;
+  physicalDocumentUpdatedAt: string | null;
+  emergencyCardToken: string | null;
+  emergencyCardCreatedAt: string | null;
+  emergencyMedicalNotes: string;
+  emergencyPrimaryContactName: string;
+  emergencyPrimaryContactPhone: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -111,6 +133,103 @@ export type SaccoNominee = {
   relationship: string;
   /** Share of this SACCO account, 0–100 */
   percentage: number;
+};
+
+export type WillDraft = {
+  testatorName: string;
+  testatorId: string;
+  primaryResidence: string;
+  executorName: string;
+  executorPhone: string;
+  altExecutorName: string;
+  altExecutorPhone: string;
+  guardianName: string;
+  guardianPhone: string;
+  altGuardianName: string;
+  witnessAcknowledged: boolean;
+  notes: string;
+  /** Auto-injected when any named heir is under 18 */
+  testamentaryTrustEnabled: boolean;
+  testamentaryTrustTerms: string;
+  testamentaryTrustUntilAge: number;
+  /** Elder is 75+ or frail — Law of Succession Act testamentary capacity */
+  over75OrFrail: boolean;
+  medicalCapacityAttached: boolean;
+  medicalCapacityDocumentName: string | null;
+  medicalCapacityDocumentPath: string | null;
+  medicalCapacityUploadedAt: string | null;
+  /** Factual reason if a spouse or child is left out of the Will */
+  disinheritanceExplanation: string;
+  updatedAt: string;
+};
+
+export type TrustDraft = {
+  trustName: string;
+  primaryTrustee: string;
+  coTrustee: string;
+  titleNumbers: string;
+  conditions: string;
+  /** Independent mediator / LSK advocate — Trust Administration Law */
+  enforcerName: string;
+  enforcerPhone: string;
+  enforcerIdNumber: string;
+  enforcerOrganization: string;
+  minCoSignApprovals: number;
+  over75OrFrail: boolean;
+  medicalCapacityAttached: boolean;
+  medicalCapacityDocumentName: string | null;
+  medicalCapacityDocumentPath: string | null;
+  medicalCapacityUploadedAt: string | null;
+  updatedAt: string;
+};
+
+export type BurialWishes = {
+  burialLocation: "ancestral" | "cemetery" | "undecided";
+  burialDetails: string;
+  committeeLead1: string;
+  committeeLead2: string;
+  specialMessage: string;
+  /** First 30 Days — plot pin + customary directives */
+  burialPlotTitle: string;
+  burialGpsLat: number | null;
+  burialGpsLng: number | null;
+  clanEldersToInvolve: string;
+  culturalTraditions: string;
+  /** Pre-allocated liquidity (nominee data, not a live SACCO/M-Pesa API) */
+  saccoNomineeName: string;
+  saccoNomineePhone: string;
+  saccoAccount: string;
+  mpesaNomineePhone: string;
+  insurancePolicyRef: string;
+  liquidityNotes: string;
+  updatedAt: string;
+};
+
+export type DsarStatus = "received" | "in_progress" | "fulfilled" | "refused";
+
+export type DsarRequest = {
+  id: string;
+  elderUserId: string | null;
+  requesterName: string;
+  requesterPhone: string;
+  requestType: "access" | "correction" | "deletion" | "restriction";
+  status: DsarStatus;
+  notes: string;
+  createdAt: string;
+  fulfilledAt: string | null;
+};
+
+export type OutboundNotice = {
+  id: string;
+  vaultId: string | null;
+  channel: "whatsapp" | "sms";
+  toPhone: string;
+  body: string;
+  status: "queued" | "sent" | "failed";
+  relatedAction: string;
+  createdAt: string;
+  sentAt: string | null;
+  error: string | null;
 };
 
 export type Asset = {
@@ -133,6 +252,8 @@ export type Asset = {
   blockNumber: string;
   registrationSection: string;
   landRegistryOffice: string;
+  /** Empty until the elder picks how the shamba is registered */
+  landOwnershipType: LandOwnershipType | "";
   // Vehicle
   registrationNumber: string;
   makeModel: string;
@@ -149,6 +270,9 @@ export type Asset = {
   saccoMemberNumber: string;
   saccoNominees: SaccoNominee[];
   mpesaNumber: string;
+  disputeFlag: boolean;
+  disputeNotes: string;
+  familyAlert: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -160,6 +284,11 @@ export type Beneficiary = {
   idNumber: string;
   phone: string;
   relationship: string;
+  /** ISO date (YYYY-MM-DD); empty when unknown */
+  dateOfBirth: string;
+  /** Polygamous house under Law of Succession Act s.40 */
+  houseId: string | null;
+  isMinor: boolean;
   createdAt: string;
 };
 
@@ -286,7 +415,8 @@ export type AudioTestament = {
 
 export type TitleLookupResult = {
   found: boolean;
-  simulated: true;
+  /** True only on pre-2026 demo rows. New searches are never simulated. */
+  simulated: boolean;
   ownerName: string | null;
   registrationStatus: string;
   approximateLocation: string | null;
@@ -295,6 +425,15 @@ export type TitleLookupResult = {
   rawNote: string;
 };
 
+export type ArdhiSasaVerificationStatus =
+  | "pending_advocate_submission"
+  | "awaiting_owner_consent"
+  | "certificate_on_file"
+  | "withdrawn"
+  | "legacy_simulated";
+
+export type ArdhiSasaConsentPath = "paper_authorization" | "family_assisted";
+
 export type TitleLookupRecord = {
   id: string;
   vaultId: string;
@@ -302,17 +441,78 @@ export type TitleLookupRecord = {
   reviewRequestId: string | null;
   titleNumber: string;
   county: string;
+  parcelNumber: string;
+  blockNumber: string;
+  registrationSection: string;
+  landRegistryOffice: string;
   result: TitleLookupResult;
   requestedByUserId: string;
   costKes: number;
+  ardhiSasaId: string;
+  ecitizenId: string;
+  status: ArdhiSasaVerificationStatus;
+  consentPath: ArdhiSasaConsentPath;
+  consentHelperBeneficiaryId: string | null;
+  consentHelperName: string;
+  consentHelperPhone: string;
+  authorizationName: string | null;
+  authorizationPath: string | null;
+  authorizationSignedAt: string | null;
+  familyAlertSentAt: string | null;
+  advocateNotes: string;
+  documentName: string | null;
+  documentPath: string | null;
+  filedAt: string | null;
+  certificateUploadedAt: string | null;
   createdAt: string;
+  updatedAt: string;
+};
+
+export type CheckoutCurrency = "KES" | "USD" | "GBP" | "EUR";
+
+export type CheckoutProvider = "mpesa" | "stripe" | "till" | "queued";
+
+export type CheckoutStatus =
+  | "pending"
+  | "initiated"
+  | "paid"
+  | "failed"
+  | "queued";
+
+export type CheckoutKind =
+  | "advocate_fee"
+  | "estate_maintenance"
+  | "title_lookup"
+  | "review"
+  | "amendment";
+
+export type PaymentCheckout = {
+  id: string;
+  vaultId: string;
+  actorUserId: string;
+  kind: CheckoutKind;
+  currency: CheckoutCurrency;
+  amount: number;
+  amountKesEquivalent: number;
+  provider: CheckoutProvider;
+  status: CheckoutStatus;
+  mpesaPhone: string;
+  mpesaReceipt: string | null;
+  stripeSessionId: string | null;
+  reference: string;
+  detail: string;
+  gatewayNote: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type BillingKind =
   | "review_submitted"
   | "amendment_opened"
   | "amendment_submitted"
-  | "title_lookup";
+  | "title_lookup"
+  | "advocate_fee"
+  | "estate_maintenance";
 
 export type BillingRecord = {
   id: string;
@@ -321,6 +521,8 @@ export type BillingRecord = {
   kind: BillingKind;
   detail: string;
   amountKes: number;
+  currency: CheckoutCurrency;
+  provider: CheckoutProvider;
   paid: boolean;
   paidAt: string | null;
   paidByUserId: string | null;
@@ -351,13 +553,17 @@ export type CaseMessage = {
 
 export type ConsultBooking = {
   id: string;
-  reviewRequestId: string;
+  reviewRequestId: string | null;
   vaultId: string;
   advocateId: string;
   mode: "whatsapp" | "video" | "in_person";
   scheduledAt: string;
   notes: string;
   status: "scheduled" | "done" | "cancelled";
+  kind: "consult" | "video_notarization";
+  diasporaSignerName: string;
+  diasporaSignerPhone: string;
+  meetingUrl: string;
   createdAt: string;
 };
 
@@ -415,6 +621,13 @@ export type OtpRecord = {
   meta?: Record<string, unknown>;
 };
 
+export type ExecutionEnforcer = {
+  fullName: string;
+  phone: string;
+  idNumber: string;
+  organization: string;
+};
+
 export type ExecutionTrustee = {
   fullName: string;
   phone: string;
@@ -442,6 +655,9 @@ export type ExecutionPlan = {
   guardians: ExecutionGuardian[];
   /** Distinct guardians who must confirm; the dual-guardian rule defaults to 2 */
   minGuardianApprovals: number;
+  /** Independent mediator who breaks co-trustee / heir deadlocks */
+  enforcer: ExecutionEnforcer | null;
+  minCoSignApprovals: number;
   requireDeathCertificate: boolean;
   /** Chief's / hospital death notification form, separate from the certificate */
   requireDeathNotification: boolean;
@@ -560,6 +776,78 @@ export type AdvocateMatch = {
   resolvedAt: string | null;
 };
 
+/** Polygamous household "house" under Law of Succession Act s.40 */
+export type HouseholdHouse = {
+  id: string;
+  vaultId: string;
+  houseLabel: string;
+  wifeName: string;
+  notes: string;
+  allocatedAssetIds: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ConsensusProposalKind =
+  | "amend_trust"
+  | "liquidate_share"
+  | "transfer_asset"
+  | "execute_amendment";
+
+export type ConsensusSignerRole =
+  | "settlor"
+  | "trustee"
+  | "enforcer"
+  | "heir"
+  | "family_rep";
+
+export type ConsensusSignature = {
+  userId: string;
+  signerName: string;
+  signerPhone: string;
+  role: ConsensusSignerRole;
+  signedAt: string;
+};
+
+export type ConsensusProposal = {
+  id: string;
+  vaultId: string;
+  kind: ConsensusProposalKind;
+  title: string;
+  summary: string;
+  payload: Record<string, unknown>;
+  proposedByUserId: string;
+  requiredApprovals: number;
+  status: "open" | "approved" | "rejected" | "executed" | "expired";
+  signatures: ConsensusSignature[];
+  createdAt: string;
+  resolvedAt: string | null;
+};
+
+export type BuyoutResponse = {
+  beneficiaryId: string;
+  responderName: string;
+  decision: "accept" | "decline";
+  offerKes: number | null;
+  createdAt: string;
+};
+
+export type BuyoutOffer = {
+  id: string;
+  vaultId: string;
+  proposalId: string | null;
+  sellerBeneficiaryId: string;
+  assetId: string | null;
+  sharePercent: number;
+  askingPriceKes: number;
+  status: "open" | "family_accepted" | "expired" | "withdrawn" | "open_market";
+  windowEndsAt: string;
+  responses: BuyoutResponse[];
+  acceptedByBeneficiaryId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type Database = {
   users: User[];
   vaults: Vault[];
@@ -578,12 +866,18 @@ export type Database = {
   successionApprovals: SuccessionApproval[];
   advocateApplications: AdvocateApplication[];
   billingRecords: BillingRecord[];
+  paymentCheckouts: PaymentCheckout[];
   supportSessions: SupportSession[];
   caseMessages: CaseMessage[];
   consultBookings: ConsultBooking[];
   marketingLeads: MarketingLead[];
   publicStatusTokens: PublicStatusToken[];
   vaultBinders: VaultBinder[];
+  householdHouses: HouseholdHouse[];
+  consensusProposals: ConsensusProposal[];
+  buyoutOffers: BuyoutOffer[];
   otps: OtpRecord[];
   auditLog: AuditEntry[];
+  dsarRequests: DsarRequest[];
+  outboundNotices: OutboundNotice[];
 };

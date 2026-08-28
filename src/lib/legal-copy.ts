@@ -52,7 +52,7 @@ const terms: Record<Locale, LegalDoc> = {
       {
         heading: "6. No guarantees of land outcomes",
         body: [
-          "We do not guarantee Ministry of Lands outcomes, absence of caveats, or that courts will uphold any plan. Title lookups shown in demos or tools may be simulated until live registry integrations are enabled. Always rely on official searches and advocate advice for high-stakes decisions.",
+          "We do not guarantee Ministry of Lands outcomes, absence of caveats, or that courts will uphold any plan. Official searches are filed by an LSK partner advocate. The owner authorizes the search with a signed paper form or by (or with help from family) approving the request in their ArdhiSasa Notifications. Always rely on the official search PDF stored in the vault and advocate advice for high-stakes decisions.",
         ],
       },
       {
@@ -220,9 +220,9 @@ const privacy: Record<Locale, LegalDoc> = {
         ],
       },
       {
-        heading: "9. Contact",
+        heading: "9. Contact / Data Protection Officer",
         body: [
-          "Data questions: +254 748 879 579 · Offices: Nairobi, Nakuru, Eldoret.",
+          "Data questions and Data Subject Access Requests: +254 748 879 579 or WhatsApp. Our Data Protection Officer desk logs access, correction, deletion, and restriction requests in Admin Ops under Kenya’s Data Protection Act, 2019. Offices: Nairobi, Nakuru, Eldoret.",
         ],
       },
     ],
@@ -292,9 +292,9 @@ const privacy: Record<Locale, LegalDoc> = {
         ],
       },
       {
-        heading: "9. Mawasiliano",
+        heading: "9. Mawasiliano / Afisa wa Ulinzi wa Data",
         body: [
-          "Maswali ya data: +254 748 879 579 · Ofisi: Nairobi, Nakuru, Eldoret.",
+          "Maswali ya data na maombi ya DSAR: +254 748 879 579 au WhatsApp. Dawati la Afisa wa Ulinzi wa Data linarekodi maombi ya ufikiaji, marekebisho, kufutwa, na kuzuia chini ya Sheria ya Ulinzi wa Data, 2019. Ofisi: Nairobi, Nakuru, Eldoret.",
         ],
       },
     ],
@@ -323,6 +323,10 @@ const faqs: Record<
         a: "Yes — Agent Mode lets a trusted family member help. Final review submission and sensitive changes still require your authorisation.",
       },
       {
+        q: "Can I talk instead of filling long forms?",
+        a: "Yes. In your vault, open Talk to Amani. Amani asks one simple question at a time in English or Kiswahili. You can speak, type, or photograph an ID or title deed. The usual Assets and Heirs pages still work if you prefer them.",
+      },
+      {
         q: "Are draft edits free?",
         a: "Yes. Saving assets, heirs, and allocations never bills you. You are charged when you intentionally submit for legal review (or open a paid amendment after the free 48-hour window).",
       },
@@ -340,7 +344,7 @@ const faqs: Record<
       },
       {
         q: "How much does it cost?",
-        a: "Packages are charged at legal-review submit. Amendments can be free within 48h then a smaller fee. Each title / ArdhiSasa search is billed separately. See homepage pricing.",
+        a: "Packages are charged at legal-review submit. Amendments can be free within 48h then a smaller fee. Each advocate-filed ArdhiSasa search is billed separately (~KES 1,500). See homepage pricing.",
       },
       {
         q: "Do you work in Swahili?",
@@ -379,6 +383,10 @@ const faqs: Record<
       {
         q: "Je, mwanangu anaweza kujaza fomu?",
         a: "Ndiyo — Hali ya Wakala inaruhusu msaada. Uwasilishaji wa mwisho unahitaji idhini yako.",
+      },
+      {
+        q: "Naweza kuongea badala ya kujaza fomu ndefu?",
+        a: "Ndiyo. Katika hifadhi yako, fungua Ongea na Amani. Amani anauliza swali moja rahisi kwa wakati kwa Kiingereza au Kiswahili. Unaweza kuzungumza, kuandika, au kupiga picha ya kitambulisho au hati miliki. Kurasa za Mali na Warithi bado zinapatikana.",
       },
       {
         q: "Gharama ni kiasi gani?",

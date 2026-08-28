@@ -1,11 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import { useLocale } from "@/components/locale-provider";
 import { buildWhatsAppUrl } from "@/lib/whatsapp";
-
-const HERO_IMAGE =
-  "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=2000&q=80";
 
 export function Hero() {
   const { t, locale } = useLocale();
@@ -16,15 +12,11 @@ export function Hero() {
       : "Hello ShambaTrust, I would like to talk to an advocate about my family's legacy.";
 
   return (
-    <section className="relative min-h-[100svh] overflow-hidden text-white">
-      <Image
-        src={HERO_IMAGE}
-        alt="Kenyan farmland under open sky"
-        fill
-        priority
-        className="hero-media object-cover object-center"
-        sizes="100vw"
-      />
+    <section
+      className="relative min-h-[100svh] overflow-hidden bg-[#0B1D3A] bg-cover bg-center text-white"
+      style={{ backgroundImage: "url(/landing/hero-kericho.png)" }}
+      aria-label="Misty morning over rolling Kericho farmland and a modest homestead"
+    >
       <div
         className="absolute inset-0"
         style={{ background: "var(--hero-overlay)" }}
@@ -34,7 +26,7 @@ export function Hero() {
         className="absolute inset-0"
         style={{
           background:
-            "linear-gradient(180deg, rgba(14,28,20,0.25) 0%, rgba(14,28,20,0.55) 55%, rgba(14,28,20,0.82) 100%)",
+            "linear-gradient(180deg, rgba(11,29,58,0.28) 0%, rgba(11,29,58,0.58) 55%, rgba(11,29,58,0.86) 100%)",
         }}
         aria-hidden
       />
@@ -49,15 +41,15 @@ export function Hero() {
         <p className="fade-up-delay-2 mt-5 max-w-2xl text-lg text-[#e6efe8] sm:text-xl">
           {t.hero.subhead}
         </p>
-        <div className="fade-up-delay-2 mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-          <a href="/signup" className="btn btn-brass">
+        <div className="fade-up-delay-2 mt-8 flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <a href="/signup" className="btn btn-primary w-full sm:w-auto">
             {t.hero.ctaPrimary}
           </a>
           <a
             href={buildWhatsAppUrl(advocateMessage)}
             target="_blank"
             rel="noopener noreferrer"
-            className="btn btn-secondary"
+            className="btn btn-secondary w-full sm:w-auto"
           >
             {t.hero.ctaSecondary}
           </a>

@@ -9,12 +9,18 @@ import {
   listAllocations,
   listAssets,
   listAudit,
+  listAudioTestaments,
   listBeneficiaries,
+  listBuyoutOffers,
+  listConsensusProposals,
+  listHouseholdHouses,
   listLegalDocuments,
+  listPaymentCheckouts,
   listReviewRequests,
   listTitleLookups,
   listVaultBinders,
 } from "@/lib/db/store";
+import { spokenLanguageLabel } from "@/lib/languages";
 
 type Params = { params: Promise<{ vaultId: string }> };
 
@@ -42,6 +48,7 @@ export async function GET(_request: Request, { params }: Params) {
     binders,
     latestBinder,
     plan,
+    testaments,
   ] = await Promise.all([
     findUserById(vault.ownerId),
     listAssets(vaultId),
@@ -54,6 +61,13 @@ export async function GET(_request: Request, { params }: Params) {
     listVaultBinders(vaultId),
     getLatestVaultBinder(vaultId),
     getExecutionPlan(vaultId),
+    listAudioTestaments(vaultId),
+  ]);
+  const [houses, proposals, buyouts, checkouts] = await Promise.all([
+    listHouseholdHouses(vaultId),
+    listConsensusProposals(vaultId),
+    listBuyoutOffers(vaultId),
+    listPaymentCheckouts(vaultId),
   ]);
 
   await addAudit({
@@ -77,6 +91,15 @@ export async function GET(_request: Request, { params }: Params) {
           email: owner.email,
           county: owner.county,
           address: owner.address,
+          preferredLanguage: owner.preferredLanguage,
+          idOnFile: Boolean(owner.idFrontPath || owner.idBackPath),
+          idFrontName: owner.idFrontName,
+          idBackName: owner.idBackName,
+          isDiaspora: owner.isDiaspora,
+          countryOfResidence: owner.countryOfResidence,
+          ardhiSasaId: owner.ardhiSasaId,
+          ecitizenId: owner.ecitizenId,
+          passportNumber: owner.passportNumber,
         }
       : null,
     assets: assets.map((a) => ({
@@ -94,6 +117,17 @@ export async function GET(_request: Request, { params }: Params) {
     })),
     lookups,
     executionPlan: plan,
+    testaments: testaments.map((t) => ({
+      id: t.id,
+      title: t.title,
+      languageLabel: spokenLanguageLabel(t.language),
+      durationSeconds: t.durationSeconds,
+      transcript: t.transcript,
+      transcriptStatus: t.transcriptStatus,
+      recordedByAgent: t.recordedByAgent,
+      assetId: t.assetId,
+      createdAt: t.createdAt,
+    })),
     audit,
     binders: binders.map((b) => ({
       id: b.id,
@@ -125,5 +159,9 @@ export async function GET(_request: Request, { params }: Params) {
         }
       : null,
     viewReviewId: latestReview?.id || null,
+    houses,
+    proposals,
+    buyouts,
+    checkouts,
   });
 }

@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
-import { promises as fs } from "fs";
-import path from "path";
 import { requireVaultAccess } from "@/lib/vault-access";
 import { vaultContentLocked } from "@/lib/vault-lock";
 import {
   addAudit,
   deleteAudioTestament,
-  testamentUploadsDir,
+  deleteStoredFile,
 } from "@/lib/db/store";
 
 type Params = { params: Promise<{ id: string }> };
@@ -43,9 +41,9 @@ export async function DELETE(_request: Request, { params }: Params) {
   }
 
   try {
-    await fs.unlink(path.join(testamentUploadsDir(), removed.documentPath));
+    await deleteStoredFile(removed.documentPath);
   } catch {
-    // The row is already gone; a missing file on disk is not an error.
+    // The row is already gone; a missing file is not an error.
   }
 
   await addAudit({

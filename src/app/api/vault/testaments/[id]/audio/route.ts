@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
-import { promises as fs } from "fs";
-import path from "path";
 import { readSession } from "@/lib/auth/session";
-import { addAudit, testamentUploadsDir } from "@/lib/db/store";
+import { addAudit, isUnsafeBlobKey, readStoredFile } from "@/lib/db/store";
 import { resolveAudioTestamentAccess } from "@/lib/secure-docs/access";
 
 type Params = { params: Promise<{ id: string }> };
@@ -25,18 +23,15 @@ export async function GET(_request: Request, { params }: Params) {
   }
 
   const { testament } = resolved;
-  if (
-    testament.documentPath.includes("..") ||
-    testament.documentPath.includes("/") ||
-    testament.documentPath.includes("\\")
-  ) {
+  if (isUnsafeBlobKey(testament.documentPath)) {
     return NextResponse.json({ error: "Invalid file." }, { status: 400 });
   }
 
   try {
-    const bytes = await fs.readFile(
-      path.join(testamentUploadsDir(), testament.documentPath),
-    );
+    const bytes = await readStoredFile(testament.documentPath);
+    if (!bytes) {
+      return NextResponse.json({ error: "Recording missing on server." }, { status: 404 });
+    }
 
     await addAudit({
       vaultId: testament.vaultId,
@@ -45,7 +40,7 @@ export async function GET(_request: Request, { params }: Params) {
       detail: `${testament.title} · ${session.role}`,
     });
 
-    return new NextResponse(bytes, {
+    return new NextResponse(new Uint8Array(bytes), {
       status: 200,
       headers: {
         "Content-Type": testament.mimeType,

@@ -76,6 +76,9 @@ function redactAsset(a: Asset) {
     saccoMemberNumber: "",
     saccoNominees: [] as Asset["saccoNominees"],
     mpesaNumber: "",
+    disputeFlag: false,
+    disputeNotes: "",
+    familyAlert: false,
     createdAt: a.createdAt,
     updatedAt: a.updatedAt,
   };

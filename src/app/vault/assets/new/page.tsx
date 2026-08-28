@@ -7,6 +7,9 @@ import { vaultCopy } from "@/lib/vault-copy";
 import { isLandLike, uploadLabel } from "@/lib/asset-fields";
 import { KENYA_COUNTIES } from "@/lib/kenya-counties";
 import type { AssetType } from "@/lib/db/types";
+import type { LandOwnershipType } from "@/lib/legal/ownership";
+import { landOwnershipLabel } from "@/lib/legal/ownership";
+import { JointTenancyAlert } from "@/components/joint-tenancy-alert";
 
 const TYPES: AssetType[] = [
   "land",
@@ -49,10 +52,14 @@ export default function NewAssetPage() {
   const [landmark, setLandmark] = useState("");
   const [gpsLat, setGpsLat] = useState("");
   const [gpsLng, setGpsLng] = useState("");
+  const [disputeFlag, setDisputeFlag] = useState(false);
+  const [disputeNotes, setDisputeNotes] = useState("");
+  const [familyAlert, setFamilyAlert] = useState(false);
   const [parcelNumber, setParcelNumber] = useState("");
   const [blockNumber, setBlockNumber] = useState("");
   const [registrationSection, setRegistrationSection] = useState("");
   const [landRegistryOffice, setLandRegistryOffice] = useState("");
+  const [landOwnershipType, setLandOwnershipType] = useState<LandOwnershipType | "">("");
   const [registrationNumber, setRegistrationNumber] = useState("");
   const [makeModel, setMakeModel] = useState("");
   const [year, setYear] = useState("");
@@ -86,6 +93,9 @@ export default function NewAssetPage() {
     setLandmark("");
     setGpsLat("");
     setGpsLng("");
+    setDisputeFlag(false);
+    setDisputeNotes("");
+    setFamilyAlert(false);
     setParcelNumber("");
     setBlockNumber("");
     setRegistrationSection("");
@@ -175,10 +185,14 @@ export default function NewAssetPage() {
           landmark: isLandLike(type) ? landmark : "",
           gpsLat: isLandLike(type) && gpsLat ? Number(gpsLat) : null,
           gpsLng: isLandLike(type) && gpsLng ? Number(gpsLng) : null,
+          disputeFlag: isLandLike(type) ? disputeFlag : false,
+          disputeNotes: isLandLike(type) ? disputeNotes : "",
+          familyAlert: isLandLike(type) ? familyAlert : false,
           parcelNumber: isLandLike(type) ? parcelNumber : "",
           blockNumber: isLandLike(type) ? blockNumber : "",
           registrationSection: isLandLike(type) ? registrationSection : "",
           landRegistryOffice: isLandLike(type) ? landRegistryOffice : "",
+          landOwnershipType: isLandLike(type) ? landOwnershipType : "",
           registrationNumber: type === "vehicle" ? registrationNumber : "",
           makeModel: type === "vehicle" ? makeModel : "",
           year: type === "vehicle" ? year : "",
@@ -333,6 +347,34 @@ export default function NewAssetPage() {
                     onChange={(e) => setTitleNumber(e.target.value)}
                   />
                 </div>
+                <fieldset className="rounded-[0.35rem] border-2 border-border p-4">
+                  <legend className="px-2 text-base font-semibold text-forest-deep">
+                    {sw ? "Aina ya umiliki" : "Ownership type"}
+                  </legend>
+                  {(
+                    [
+                      "sole_owner",
+                      "joint_tenancy",
+                      "tenancy_in_common",
+                    ] as LandOwnershipType[]
+                  ).map((option) => (
+                    <label key={option} className="mt-2 flex min-h-12 items-start gap-3 text-lg">
+                      <input
+                        type="radio"
+                        className="mt-1 h-5 w-5"
+                        name="landOwnershipType"
+                        checked={landOwnershipType === option}
+                        onChange={() => setLandOwnershipType(option)}
+                      />
+                      <span>{landOwnershipLabel(option, locale)}</span>
+                    </label>
+                  ))}
+                  {landOwnershipType === "joint_tenancy" && (
+                    <div className="mt-3">
+                      <JointTenancyAlert locale={locale} />
+                    </div>
+                  )}
+                </fieldset>
                 <div>
                   <label className="field-label" htmlFor="county">
                     {sw ? "Kaunti" : "County"}
@@ -371,13 +413,13 @@ export default function NewAssetPage() {
                 <fieldset className="rounded-[0.35rem] border-2 border-border p-4">
                   <legend className="px-2 text-base font-semibold text-forest-deep">
                     {sw
-                      ? "Utambulisho wa ArdhiSasa (si lazima)"
-                      : "ArdhiSasa parcel search (optional)"}
+                      ? "Utambulisho wa kiwanja (ArdhiSasa)"
+                      : "ArdhiSasa parcel identifiers"}
                   </legend>
                   <p className="text-base text-muted">
                     {sw
-                      ? "Nakili haya kutoka kwa hati miliki yako. Husaidia wakili kupata kiwanja haraka."
-                      : "Copy these from your title deed. They let your advocate find the parcel on the first search."}
+                      ? "Nakili haya kutoka kwa hati miliki yako. Wakili wa LSK atawasilisha utafutaji. Mzee anaweza kusaini fomu moja au kupata msaada wa mtoto."
+                      : "Copy these from your title deed. Your LSK advocate files the search. The elder can consent with a one-page signed form or with help from a child."}
                   </p>
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <div>
@@ -770,29 +812,105 @@ export default function NewAssetPage() {
             </div>
 
             {isLandLike(type) && (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="field-label" htmlFor="lat">
-                    GPS latitude ({sw ? "si lazima" : "optional"})
-                  </label>
-                  <input
-                    id="lat"
-                    className="field"
-                    value={gpsLat}
-                    onChange={(e) => setGpsLat(e.target.value)}
-                  />
+              <div className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="field-label" htmlFor="lat">
+                      GPS latitude ({sw ? "si lazima" : "optional"})
+                    </label>
+                    <input
+                      id="lat"
+                      className="field"
+                      value={gpsLat}
+                      onChange={(e) => setGpsLat(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="field-label" htmlFor="lng">
+                      GPS longitude ({sw ? "si lazima" : "optional"})
+                    </label>
+                    <input
+                      id="lng"
+                      className="field"
+                      value={gpsLng}
+                      onChange={(e) => setGpsLng(e.target.value)}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="field-label" htmlFor="lng">
-                    GPS longitude ({sw ? "si lazima" : "optional"})
-                  </label>
-                  <input
-                    id="lng"
-                    className="field"
-                    value={gpsLng}
-                    onChange={(e) => setGpsLng(e.target.value)}
-                  />
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    className="btn btn-secondary-dark"
+                    onClick={() => {
+                      if (!navigator.geolocation) {
+                        setError(
+                          sw
+                            ? "Kivinjari hiki hakina GPS."
+                            : "This browser cannot read GPS.",
+                        );
+                        return;
+                      }
+                      navigator.geolocation.getCurrentPosition(
+                        (pos) => {
+                          setGpsLat(String(pos.coords.latitude));
+                          setGpsLng(String(pos.coords.longitude));
+                        },
+                        () =>
+                          setError(
+                            sw
+                              ? "Hatukuweza kupata eneo. Weka namba kwa mkono."
+                              : "Could not read location. Enter coordinates manually.",
+                          ),
+                      );
+                    }}
+                  >
+                    {sw ? "Pini eneo langu" : "Pin my location"}
+                  </button>
+                  {gpsLat && gpsLng ? (
+                    <a
+                      className="btn btn-secondary-dark"
+                      href={`https://www.google.com/maps?q=${encodeURIComponent(`${gpsLat},${gpsLng}`)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {sw ? "Fungua ramani" : "Open in Maps"}
+                    </a>
+                  ) : null}
                 </div>
+                <label className="flex items-start gap-3 text-base">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-5 w-5"
+                    checked={disputeFlag}
+                    onChange={(e) => setDisputeFlag(e.target.checked)}
+                  />
+                  <span>
+                    {sw
+                      ? "Kiwanja hiki kiko kwenye mzozo au caveat."
+                      : "This parcel is in active dispute or has a caveat."}
+                  </span>
+                </label>
+                <label className="flex items-start gap-3 text-base">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-5 w-5"
+                    checked={familyAlert}
+                    onChange={(e) => setFamilyAlert(e.target.checked)}
+                  />
+                  <span>
+                    {sw
+                      ? "Onyo la familia: kuuzwa/kugawanywa bila ridhaa."
+                      : "Family alert: watch for unauthorized sale or subdivision."}
+                  </span>
+                </label>
+                {(disputeFlag || familyAlert) && (
+                  <textarea
+                    className="field min-h-[5rem]"
+                    placeholder={sw ? "Maelezo ya mzozo" : "Dispute / alert notes"}
+                    value={disputeNotes}
+                    onChange={(e) => setDisputeNotes(e.target.value)}
+                  />
+                )}
               </div>
             )}
 

@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { BillingRecord } from "@/lib/db/types";
+import type { BillingRecord, PaymentCheckout } from "@/lib/db/types";
 
 export default function OpsBillingPage() {
   const [records, setRecords] = useState<BillingRecord[]>([]);
+  const [checkouts, setCheckouts] = useState<PaymentCheckout[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [seat, setSeat] = useState<string | null>(null);
 
@@ -16,6 +17,7 @@ export default function OpsBillingPage() {
       return;
     }
     setRecords(json.records || []);
+    setCheckouts(json.checkouts || []);
     setSeat(json.seat);
   }, []);
 
@@ -70,7 +72,7 @@ export default function OpsBillingPage() {
         <div>
           <h1 className="text-3xl font-semibold">Billing desk</h1>
           <p className="mt-2 text-[#9aa89c]">
-            Review / amendment / title-lookup events. Unpaid:{" "}
+            Review / amendment / ArdhiSasa filing events. Unpaid:{" "}
             <span className="font-semibold text-[#d4a574]">
               KES {unpaid.toLocaleString()}
             </span>
@@ -94,7 +96,9 @@ export default function OpsBillingPage() {
           >
             <div>
               <p className="font-semibold capitalize text-[#e8efe9]">
-                {r.kind.replace(/_/g, " ")} · KES {r.amountKes.toLocaleString()}
+                {r.kind.replace(/_/g, " ")} · {r.currency || "KES"} · KES{" "}
+                {r.amountKes.toLocaleString()}
+                {r.provider ? ` · ${r.provider}` : ""}
               </p>
               <p className="text-[#9aa89c]">{r.detail}</p>
               <p className="text-xs text-[#9aa89c]">
@@ -119,6 +123,27 @@ export default function OpsBillingPage() {
           <li className="text-[#9aa89c]">No billing events yet.</li>
         )}
       </ul>
+      {checkouts.length > 0 && (
+        <section>
+          <h2 className="text-xl font-semibold">Diaspora checkouts</h2>
+          <ul className="mt-3 space-y-2">
+            {checkouts.map((c) => (
+              <li
+                key={c.id}
+                className="rounded border border-[#3d4a40] bg-[#121a16] p-4 text-sm"
+              >
+                <p className="font-semibold">
+                  {c.currency} {c.amount} · {c.provider} · {c.status}
+                </p>
+                <p className="text-[#9aa89c]">{c.detail}</p>
+                {c.gatewayNote ? (
+                  <p className="text-xs text-[#9aa89c]">{c.gatewayNote}</p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }

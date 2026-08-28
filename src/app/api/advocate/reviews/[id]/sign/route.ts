@@ -1,6 +1,4 @@
 import { NextResponse } from "next/server";
-import { promises as fs } from "fs";
-import path from "path";
 import { randomUUID } from "crypto";
 import { z } from "zod";
 import { checklistComplete } from "@/lib/advocate/checklist";
@@ -12,7 +10,7 @@ import {
   getReviewRequest,
   listLegalDocumentsForReview,
   signLegalDocument,
-  uploadsDir,
+  writeStoredFile,
 } from "@/lib/db/store";
 
 type Params = { params: Promise<{ id: string }> };
@@ -76,9 +74,7 @@ export async function POST(request: Request, { params }: Params) {
       const bytes = Buffer.from(await file.arrayBuffer());
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
       const filename = `certified-${review.vaultId}-${randomUUID()}-${safeName}`;
-      const dir = uploadsDir();
-      await fs.mkdir(dir, { recursive: true });
-      await fs.writeFile(path.join(dir, filename), bytes);
+      await writeStoredFile(filename, bytes, file.type || undefined);
       documentName = file.name;
       documentPath = filename;
     }

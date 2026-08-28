@@ -8,11 +8,14 @@ type Lookup = {
   vaultId: string;
   titleNumber: string;
   county: string;
+  parcelNumber?: string;
   costKes: number;
   createdAt: string;
   requesterName: string;
   requesterRole: string | null;
   ownerName: string | null;
+  status?: string;
+  documentPath?: string | null;
   result: { found: boolean; registrationStatus: string };
 };
 
@@ -37,9 +40,9 @@ export default function OpsTitleLookupsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-semibold">Title-search ledger</h1>
+        <h1 className="text-3xl font-semibold">ArdhiSasa filing ledger</h1>
         <p className="mt-2 text-[#9aa89c]">
-          Every ArdhiSasa / registry lookup with cost and requester. Total:{" "}
+          Advocate-filed Ministry searches. Total billed:{" "}
           <span className="font-semibold text-[#d4a574]">
             KES {totalKes.toLocaleString()}
           </span>
@@ -60,8 +63,8 @@ export default function OpsTitleLookupsPage() {
               By {l.requesterName}
               {l.requesterRole ? ` (${l.requesterRole})` : ""} · Elder{" "}
               {l.ownerName || "—"} ·{" "}
-              {l.result.found ? "found" : "not found"} ·{" "}
-              {l.result.registrationStatus}
+              {(l.status || l.result.registrationStatus).replace(/_/g, " ")}
+              {l.documentPath ? " · certificate on file" : ""}
             </p>
             <p className="mt-1 text-xs text-[#9aa89c]">
               {new Date(l.createdAt).toLocaleString()}{" "}
@@ -75,7 +78,7 @@ export default function OpsTitleLookupsPage() {
           </li>
         ))}
         {lookups.length === 0 && (
-          <li className="text-[#9aa89c]">No title lookups yet.</li>
+          <li className="text-[#9aa89c]">No ArdhiSasa filings yet.</li>
         )}
       </ul>
     </div>

@@ -11,6 +11,13 @@ type Plan = {
   minTrusteeApprovals: number;
   guardians: Guardian[];
   minGuardianApprovals: number;
+  enforcer: {
+    fullName: string;
+    phone: string;
+    idNumber: string;
+    organization: string;
+  } | null;
+  minCoSignApprovals: number;
   requireDeathCertificate: boolean;
   requireDeathNotification: boolean;
   coolingHours: number;
@@ -21,6 +28,8 @@ const DEFAULT_PLAN: Plan = {
   minTrusteeApprovals: 2,
   guardians: [],
   minGuardianApprovals: 2,
+  enforcer: null,
+  minCoSignApprovals: 2,
   requireDeathCertificate: true,
   requireDeathNotification: true,
   coolingHours: 48,
@@ -53,6 +62,8 @@ export default function ExecutionPage() {
         guardians,
         minGuardianApprovals:
           data.plan.minGuardianApprovals ?? Math.min(2, guardians.length),
+        enforcer: data.plan.enforcer || null,
+        minCoSignApprovals: data.plan.minCoSignApprovals || 2,
         requireDeathCertificate: data.plan.requireDeathCertificate !== false,
         requireDeathNotification: Boolean(data.plan.requireDeathNotification),
         coolingHours: data.plan.coolingHours ?? 48,
@@ -75,7 +86,10 @@ export default function ExecutionPage() {
       const res = await fetch("/api/vault/execution", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(plan),
+        body: JSON.stringify({
+          ...plan,
+          enforcer: plan.enforcer?.fullName.trim() ? plan.enforcer : null,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Save failed");
@@ -316,6 +330,107 @@ export default function ExecutionPage() {
               </li>
             )}
           </ul>
+        </div>
+
+        <div className="rounded-[0.35rem] border-2 border-forest p-4">
+          <h2 className="text-xl font-semibold text-forest-deep">
+            {sw ? "Enforcer (mpatanishi huru)" : "Enforcer (independent mediator)"}
+          </h2>
+          <p className="mt-1 text-base text-muted">
+            {sw
+              ? "Wakili au mpatanishi anayevunja mkwamo kati ya wateule au warithi."
+              : "An LSK advocate or mediator who resolves deadlocks between co-trustees or joint heirs."}
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <input
+              className="field"
+              placeholder={sw ? "Jina kamili" : "Full name"}
+              value={plan.enforcer?.fullName || ""}
+              disabled={asAgent}
+              onChange={(e) =>
+                setPlan((p) => ({
+                  ...p,
+                  enforcer: {
+                    fullName: e.target.value,
+                    phone: p.enforcer?.phone || "",
+                    idNumber: p.enforcer?.idNumber || "",
+                    organization: p.enforcer?.organization || "",
+                  },
+                }))
+              }
+            />
+            <input
+              className="field"
+              placeholder="+2547…"
+              value={plan.enforcer?.phone || ""}
+              disabled={asAgent}
+              onChange={(e) =>
+                setPlan((p) => ({
+                  ...p,
+                  enforcer: {
+                    fullName: p.enforcer?.fullName || "",
+                    phone: e.target.value,
+                    idNumber: p.enforcer?.idNumber || "",
+                    organization: p.enforcer?.organization || "",
+                  },
+                }))
+              }
+            />
+            <input
+              className="field"
+              placeholder={sw ? "Nambari ya ID" : "ID number"}
+              value={plan.enforcer?.idNumber || ""}
+              disabled={asAgent}
+              onChange={(e) =>
+                setPlan((p) => ({
+                  ...p,
+                  enforcer: {
+                    fullName: p.enforcer?.fullName || "",
+                    phone: p.enforcer?.phone || "",
+                    idNumber: e.target.value,
+                    organization: p.enforcer?.organization || "",
+                  },
+                }))
+              }
+            />
+            <input
+              className="field"
+              placeholder={sw ? "Kampuni / LSK" : "Firm / LSK"}
+              value={plan.enforcer?.organization || ""}
+              disabled={asAgent}
+              onChange={(e) =>
+                setPlan((p) => ({
+                  ...p,
+                  enforcer: {
+                    fullName: p.enforcer?.fullName || "",
+                    phone: p.enforcer?.phone || "",
+                    idNumber: p.enforcer?.idNumber || "",
+                    organization: e.target.value,
+                  },
+                }))
+              }
+            />
+          </div>
+          <div className="mt-4 max-w-xs">
+            <label className="field-label" htmlFor="cosign">
+              {sw ? "Sahihi za familia zinazohitajika" : "Family co-signatures required"}
+            </label>
+            <input
+              id="cosign"
+              type="number"
+              min={2}
+              max={5}
+              className="field"
+              value={plan.minCoSignApprovals}
+              disabled={asAgent}
+              onChange={(e) =>
+                setPlan((p) => ({
+                  ...p,
+                  minCoSignApprovals: Number(e.target.value) || 2,
+                }))
+              }
+            />
+          </div>
         </div>
 
         <div className="rounded-[0.35rem] border-2 border-brass p-4">

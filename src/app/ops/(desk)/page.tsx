@@ -191,8 +191,12 @@ export default function OpsOverviewPage() {
         <div className="mt-4 flex flex-wrap gap-2">
           {[
             ["/ops/elders", "Elder inspector"],
+            ["/ops/documents", "Documents"],
             ["/ops/billing", "Billing desk"],
-            ["/ops/title-lookups", "Title ledger"],
+            ["/ops/alerts", "Alerts & notices"],
+            ["/ops/dpo", "DPO / DSAR"],
+            ["/ops/intake", "WhatsApp intake"],
+            ["/ops/title-lookups", "ArdhiSasa filings"],
             ["/ops/advocates-crm", "Advocate CRM"],
             ["/ops/retention", "Doc retention"],
             ["/ops/advocates", "Applications"],

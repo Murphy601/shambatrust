@@ -21,8 +21,12 @@ export async function GET() {
   );
   const enriched = await Promise.all(
     upcoming.map(async (booking) => {
-      const review = await getReviewRequest(booking.reviewRequestId);
-      const vault = review ? await getVaultById(review.vaultId) : null;
+      const review = booking.reviewRequestId
+        ? await getReviewRequest(booking.reviewRequestId)
+        : null;
+      const vault = review
+        ? await getVaultById(review.vaultId)
+        : await getVaultById(booking.vaultId);
       const owner = vault ? await findUserById(vault.ownerId) : null;
       return {
         ...booking,

@@ -39,6 +39,10 @@ const assetSchema = z.object({
   blockNumber: z.string().optional().default(""),
   registrationSection: z.string().optional().default(""),
   landRegistryOffice: z.string().optional().default(""),
+  landOwnershipType: z
+    .enum(["", "sole_owner", "joint_tenancy", "tenancy_in_common"])
+    .optional()
+    .default(""),
   registrationNumber: z.string().optional().default(""),
   makeModel: z.string().optional().default(""),
   year: z.string().optional().default(""),
@@ -51,6 +55,9 @@ const assetSchema = z.object({
   saccoMemberNumber: z.string().optional().default(""),
   saccoNominees: z.array(nomineeSchema).max(10).optional().default([]),
   mpesaNumber: z.string().optional().default(""),
+  disputeFlag: z.boolean().optional().default(false),
+  disputeNotes: z.string().optional().default(""),
+  familyAlert: z.boolean().optional().default(false),
 });
 
 export async function GET() {
@@ -162,6 +169,17 @@ export async function POST(request: Request) {
     action: data.id ? "asset_updated" : "asset_created",
     detail: `${asset.title} (${asset.type})`,
   });
+
+  if (asset.documentPath || asset.titleNumber) {
+    const { notifyVaultStatus } = await import("@/lib/notify");
+    await notifyVaultStatus({
+      vaultId: access.vault.id,
+      action: "asset_secured",
+      body: asset.titleNumber
+        ? `Your Title Deed ${asset.titleNumber} has been secured in your ShambaTrust Vault.`
+        : `Your asset "${asset.title}" has been saved in your ShambaTrust Vault.`,
+    });
+  }
 
   return NextResponse.json({ asset });
 }

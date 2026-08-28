@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
-import { promises as fs } from "fs";
-import path from "path";
 import { randomUUID } from "crypto";
 import { requireVaultAccess } from "@/lib/vault-access";
-import { uploadsDir } from "@/lib/db/store";
+import { writeStoredFile } from "@/lib/db/store";
 
 export async function POST(request: Request) {
   const access = await requireVaultAccess();
@@ -27,12 +25,10 @@ export async function POST(request: Request) {
   const bytes = Buffer.from(await file.arrayBuffer());
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const filename = `${access.vault.id}-${randomUUID()}-${safeName}`;
-  const dir = uploadsDir();
-  await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(path.join(dir, filename), bytes);
+  const documentPath = await writeStoredFile(filename, bytes, file.type || undefined);
 
   return NextResponse.json({
     documentName: file.name,
-    documentPath: filename,
+    documentPath,
   });
 }

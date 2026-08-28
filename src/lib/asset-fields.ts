@@ -11,7 +11,7 @@ export function nomineeTotal(nominees: SaccoNominee[]): number {
 }
 
 /**
- * ArdhiSasa parcel identifiers in the order the registry search expects them.
+ * ArdhiSasa parcel identifiers an LSK advocate needs to file a professional search.
  * Returns an empty list for non-land assets.
  */
 export function parcelIdentifiers(
@@ -32,6 +32,21 @@ export function parcelIdentifiers(
       label: sw ? "Ofisi ya ardhi ya kaunti" : "County land registry",
       value: asset.landRegistryOffice,
     },
+    {
+      label: sw ? "Aina ya umiliki" : "Ownership type",
+      value:
+        asset.landOwnershipType === "joint_tenancy"
+          ? sw
+            ? "Joint tenancy"
+            : "Joint tenancy"
+          : asset.landOwnershipType === "tenancy_in_common"
+            ? "Tenancy-in-common"
+            : asset.landOwnershipType === "sole_owner"
+              ? sw
+                ? "Mmiliki pekee"
+                : "Sole owner"
+              : "",
+    },
   ].filter((row) => row.value.trim().length > 0);
 }
 
@@ -48,6 +63,19 @@ export function assetSummary(asset: Asset, locale: Locale = "en"): string {
           ? `Block: ${asset.blockNumber}`
           : `Block: ${asset.blockNumber}`
         : null,
+      asset.landOwnershipType === "joint_tenancy"
+        ? locale === "sw"
+          ? "Joint tenancy — badilisha kuwa tenancy-in-common"
+          : "Joint tenancy — convert before a Will"
+        : asset.landOwnershipType === "tenancy_in_common"
+          ? locale === "sw"
+            ? "Tenancy-in-common"
+            : "Tenancy-in-common"
+          : asset.landOwnershipType === "sole_owner"
+            ? locale === "sw"
+              ? "Mmiliki pekee"
+              : "Sole owner"
+            : null,
       asset.parcelNumber
         ? locale === "sw"
           ? `Kiwanja: ${asset.parcelNumber}`

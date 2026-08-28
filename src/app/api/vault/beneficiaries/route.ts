@@ -6,6 +6,7 @@ import { vaultContentLocked } from "@/lib/vault-lock";
 import {
   addAudit,
   listBeneficiaries,
+  listHouseholdHouses,
   saveBeneficiary,
 } from "@/lib/db/store";
 
@@ -15,6 +16,8 @@ const schema = z.object({
   idNumber: z.string().optional().default(""),
   phone: z.string().optional().default(""),
   relationship: z.string().min(1),
+  dateOfBirth: z.string().optional().default(""),
+  houseId: z.string().nullable().optional().default(null),
 });
 
 export async function GET() {
@@ -23,8 +26,10 @@ export async function GET() {
     return NextResponse.json({ error: access.error }, { status: access.status });
   }
   const beneficiaries = await listBeneficiaries(access.vault.id);
+  const houses = await listHouseholdHouses(access.vault.id);
   return NextResponse.json({
     beneficiaries,
+    houses,
     asAgent: access.asAgent,
     locked: vaultContentLocked(access.vault),
     amendmentOpen: access.vault.amendmentOpen,
@@ -86,6 +91,7 @@ async function upsertBeneficiary(body: unknown) {
 
   const beneficiary = await saveBeneficiary({
     ...parsed.data,
+    houseId: parsed.data.houseId || null,
     vaultId: access.vault.id,
   });
 

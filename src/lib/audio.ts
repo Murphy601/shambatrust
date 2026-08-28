@@ -33,6 +33,17 @@ export function audioExtension(mimeType: string): string {
   return AUDIO_EXTENSIONS[baseMimeType(mimeType)] || ".webm";
 }
 
+export function preferredRecorderMimeType(): string | undefined {
+  if (typeof MediaRecorder === "undefined") return undefined;
+  const types = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/ogg;codecs=opus",
+    "audio/mp4",
+  ];
+  return types.find((type) => MediaRecorder.isTypeSupported(type));
+}
+
 export function formatDuration(seconds: number | null): string {
   if (seconds === null || !Number.isFinite(seconds) || seconds < 0) return "—";
   const whole = Math.round(seconds);

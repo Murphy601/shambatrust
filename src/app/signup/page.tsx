@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { useLocale } from "@/components/locale-provider";
+import { PlatformDisclaimer } from "@/components/platform-disclaimer";
 import { KENYA_COUNTIES } from "@/lib/kenya-counties";
 import { vaultCopy } from "@/lib/vault-copy";
 
@@ -180,6 +181,9 @@ function SignupForm() {
         {t.signupTitle}
       </h1>
       <p className="mt-3 text-lg text-muted">{t.signupSubtitle}</p>
+      <div className="mt-4">
+        <PlatformDisclaimer sw={sw} />
+      </div>
 
       <p className="mt-4 text-sm font-semibold text-muted">
         {sw ? "Hatua" : "Step"} {Math.max(stepIndex + 1, 1)} / {steps.length}

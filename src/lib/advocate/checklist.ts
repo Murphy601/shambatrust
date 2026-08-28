@@ -39,7 +39,7 @@ const PACKAGE_ITEMS: Record<PackageTier, ChecklistItem[]> = {
   standard: [
     {
       key: "title_registry_checked",
-      label: "ArdhiSasa / land registry lookup reviewed",
+      label: "Official ArdhiSasa search certificate reviewed",
       done: false,
       notes: "",
     },
@@ -53,7 +53,7 @@ const PACKAGE_ITEMS: Record<PackageTier, ChecklistItem[]> = {
   premium: [
     {
       key: "title_registry_checked",
-      label: "ArdhiSasa / land registry lookup reviewed",
+      label: "Official ArdhiSasa search certificate reviewed",
       done: false,
       notes: "",
     },

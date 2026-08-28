@@ -25,7 +25,7 @@ Kenyan ancestral asset digitization & estate succession vault.
 - Case workspace: brief, verification checklist, consultation schedule
 - Legal document drafts (Will / Land Trust / POA)
 - Simulated e-sign + optional certified PDF upload → vault seal
-- Simulated ArdhiSasa / land registry title lookup
+- Advocate-mediated ArdhiSasa filing (no public Ministry API; official PDF stored in the vault)
 - Elder vault shows certified documents after seal
 
 ## Phase 4 — Security controls + Ops desk
@@ -56,7 +56,7 @@ Both are CSS scroll-snap tracks, so touch, trackpad, keyboard and
 
 ### Specialised data fields
 
-- **ArdhiSasa parcel search** — parcel number, block number, registration section, county land registry office alongside the LR/title number
+- **ArdhiSasa parcel identifiers** — title/LR, parcel number, block number, registration section, county land registry office, and ArdhiSasa account ID. An LSK advocate files the search and uploads the official PDF.
 - **SACCO / M-Pesa** — a `sacco` asset type with SACCO name, member ID, linked M-Pesa number, and nominee percentages that must total 100% (SACCO bylaws pay nominees outside the estate)
 - **Language preference** — mother tongue for audio-guided forms, separate from the English/Kiswahili UI toggle
 
@@ -184,7 +184,11 @@ The live Worker URL is `https://shambatrust.<your-subdomain>.workers.dev` until 
 
 The OpenNext bundle is about **2.4 MiB gzipped**, so this needs **Workers Paid** (10 MiB script limit). The free / temporary 1 MiB cap cannot host this app.
 
-Local `.data/` JSON and uploads are **ephemeral** on Workers. The vault still runs for confirmation; lasting storage is Supabase / R2 later.
+Production storage is the existing Cloudflare **D1** database `shambatrust` (`app_state` JSON) and the **R2** bucket `shambatrust-uploads`. `wrangler.jsonc` binds both. Local `next dev` still falls back to `.data/db.json` and `.data/uploads/` when those bindings are not in the request.
+
+Do not Retry an old Workers Builds job — that rebuilds the old commit. Start a **new** deploy of current `main`.
+
+When you buy a domain, attach it only to Worker `shambatrust`.
 
 ### Succession demo path
 

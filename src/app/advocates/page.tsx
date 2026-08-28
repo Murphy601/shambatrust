@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LandingPhoto } from "@/components/landing-photo";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { useLocale } from "@/components/locale-provider";
@@ -27,8 +28,9 @@ export default function AdvocatesJoinLandingPage() {
     <>
       <SiteHeader />
       <main>
-        <section className="relative overflow-hidden border-b border-border bg-[linear-gradient(135deg,#1a3328_0%,#0f1f18_50%,#243528_100%)] py-16 text-[#f4f1ea] sm:py-24">
-          <div className="section relative z-10 max-w-3xl">
+        <section className="relative overflow-hidden border-b border-border bg-[#0B1D3A] py-16 text-[#f4f1ea] sm:py-24">
+          <div className="section relative z-10 grid items-center gap-10 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="max-w-3xl">
             <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#d4a574]">
               LSK partners
             </p>
@@ -56,6 +58,16 @@ export default function AdvocatesJoinLandingPage() {
                 {sw ? "Ingia lango" : "Portal login"}
               </Link>
             </div>
+          </div>
+          <LandingPhoto
+            src="/landing/advocates.png"
+            alt={
+              sw
+                ? "Mawakili wa Kenya wakiangalia faili la mirathi lililofungwa muhuri ofisini"
+                : "Kenyan advocates reviewing a stamped succession file in a panelled office"
+            }
+            className="min-h-[16rem] lg:min-h-[22rem]"
+          />
           </div>
         </section>
 
@@ -99,8 +111,8 @@ export default function AdvocatesJoinLandingPage() {
             </li>
             <li>
               {sw
-                ? "Zana: checklist, ArdhiSasa lookup, muhuri wa kidijitali"
-                : "Tools: checklists, title lookup, digital seal"}
+                ? "Zana: checklist, uwasilishaji wa ArdhiSasa, muhuri wa kidijitali"
+                : "Tools: checklists, ArdhiSasa professional filing, digital seal"}
             </li>
           </ul>
         </section>

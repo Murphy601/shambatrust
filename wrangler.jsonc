@@ -24,4 +24,21 @@
     "NEXT_PUBLIC_WHATSAPP_NUMBER": "254748879579",
     "AUTH_DEV_MODE": "true",
   },
+  // Same D1 + R2 the 16 Aug production Worker used. Without these, a Git
+  // deploy shows the new UI but reads empty local `.data/` instead of the
+  // live vault.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "shambatrust",
+      "database_id": "821d32ad-30ae-490a-b170-50ea32649e7b",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "binding": "UPLOADS",
+      "bucket_name": "shambatrust-uploads",
+    },
+  ],
 }

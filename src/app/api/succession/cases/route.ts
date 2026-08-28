@@ -1,6 +1,4 @@
 import { NextResponse } from "next/server";
-import { promises as fs } from "fs";
-import path from "path";
 import { randomUUID } from "crypto";
 import { z } from "zod";
 import { readSession } from "@/lib/auth/session";
@@ -11,8 +9,8 @@ import {
   getVaultById,
   getVaultForUser,
   listSuccessionCasesForVault,
-  uploadsDir,
   userCanFileSuccession,
+  writeStoredFile,
 } from "@/lib/db/store";
 
 const MAX_PROOF_BYTES = 8 * 1024 * 1024;
@@ -42,9 +40,7 @@ async function storeProof(
   const bytes = Buffer.from(await value.arrayBuffer());
   const safeName = value.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const filename = `${prefix}-${vaultId}-${randomUUID()}-${safeName}`;
-  const dir = uploadsDir();
-  await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(path.join(dir, filename), bytes);
+  await writeStoredFile(filename, bytes, value.type || undefined);
   return { name: value.name, path: filename };
 }
 

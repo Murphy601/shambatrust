@@ -5,6 +5,7 @@ import {
   getLegalDocument,
   getReviewRequest,
   getSuccessionCase,
+  getTitleLookup,
   getVaultById,
   listAgentLinks,
   listReleasedCasesForUser,
@@ -56,7 +57,9 @@ export type SecureDocTarget =
   | { kind: "legal"; documentId: string; reviewId: string }
   | { kind: "asset_admin"; assetId: string; vaultId: string }
   | { kind: "death_cert"; caseId: string }
-  | { kind: "death_notification"; caseId: string };
+  | { kind: "death_notification"; caseId: string }
+  | { kind: "title_search"; lookupId: string }
+  | { kind: "title_consent"; lookupId: string };
 
 /**
  * Who may play back a voice testament: the vault owner, their active family
@@ -140,6 +143,56 @@ export async function resolveSecureDocAccess(
     }
   | { ok: false; status: number; error: string }
 > {
+  if (target.kind === "title_search" || target.kind === "title_consent") {
+    const lookup = await getTitleLookup(target.lookupId);
+    const isConsent = target.kind === "title_consent";
+    const filename = isConsent ? lookup?.authorizationPath : lookup?.documentPath;
+    if (!lookup || !filename) {
+      return {
+        ok: false,
+        status: 404,
+        error: isConsent
+          ? "Signed authorization not on file."
+          : "Official ArdhiSasa certificate not on file.",
+      };
+    }
+    const vault = await getVaultById(lookup.vaultId);
+    if (!vault) {
+      return { ok: false, status: 404, error: "Vault not found." };
+    }
+    let allowed = session.role === "admin" || vault.ownerId === session.userId;
+    if (!allowed) {
+      const links = await listAgentLinks(vault.id);
+      allowed = links.some(
+        (link) => link.status === "active" && link.agentUserId === session.userId,
+      );
+    }
+    if (!allowed && session.role === "advocate") {
+      const reviews = await listReviewRequests(vault.id);
+      allowed = reviews.some((review) =>
+        advocateHasDocAccess(review, session.userId),
+      );
+    }
+    if (!allowed) {
+      return {
+        ok: false,
+        status: 403,
+        error: isConsent
+          ? "Not authorised to view this authorization."
+          : "Not authorised to view this ArdhiSasa certificate.",
+      };
+    }
+    return {
+      ok: true,
+      vaultId: lookup.vaultId,
+      filename,
+      displayName: isConsent
+        ? lookup.authorizationName || `Land search consent · ${lookup.titleNumber}`
+        : lookup.documentName || `ArdhiSasa search · ${lookup.titleNumber}`,
+      watermarkLabel: `${session.fullName || session.role} · view-only`,
+    };
+  }
+
   if (target.kind === "death_cert" || target.kind === "death_notification") {
     const isNotification = target.kind === "death_notification";
     const successionCase = await getSuccessionCase(target.caseId);
