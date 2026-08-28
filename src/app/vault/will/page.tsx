@@ -84,6 +84,14 @@ export default function WillBuilderPage() {
     })();
   }, []);
 
+  useEffect(() => {
+    const year = Number(birthYear);
+    if (!isSeventyFiveOrOlder(year)) return;
+    setCapacity((current) =>
+      current.over75OrFrail ? current : { ...current, over75OrFrail: true },
+    );
+  }, [birthYear]);
+
   async function save(event: FormEvent) {
     event.preventDefault();
     setError(null);
