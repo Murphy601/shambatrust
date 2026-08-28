@@ -200,6 +200,40 @@ export async function listOpsDocumentIndex(query = ""): Promise<{
         });
       }
 
+      const capacityFiles = [
+        vault.willDraft?.medicalCapacityDocumentPath
+          ? {
+              key: `capacity-will:${vault.id}`,
+              title: vault.willDraft.medicalCapacityDocumentName || "Will capacity certificate",
+              uploadedAt: vault.willDraft.medicalCapacityUploadedAt || vault.updatedAt,
+            }
+          : null,
+        vault.trustDraft?.medicalCapacityDocumentPath
+          ? {
+              key: `capacity-trust:${vault.id}`,
+              title: vault.trustDraft.medicalCapacityDocumentName || "Trust capacity certificate",
+              uploadedAt: vault.trustDraft.medicalCapacityUploadedAt || vault.updatedAt,
+            }
+          : null,
+      ].filter(Boolean) as Array<{ key: string; title: string; uploadedAt: string }>;
+      for (const file of capacityFiles) {
+        fileCount += 1;
+        pending.push({
+          key: file.key,
+          elderId: user.id,
+          elderName: user.fullName,
+          phone: user.phone,
+          vaultId: vault.id,
+          title: file.title,
+          type: "Medical capacity certificate",
+          source: "Will / trust intake",
+          uploadedAt: file.uploadedAt,
+          status: "On file",
+          viewUrl: null,
+          downloadUrl: null,
+        });
+      }
+
       for (const testament of testaments) {
         searchHay += ` ${testament.title}`;
         fileCount += 1;

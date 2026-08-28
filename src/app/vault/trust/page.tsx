@@ -4,6 +4,10 @@ import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { PlatformDisclaimer } from "@/components/platform-disclaimer";
 import { useLocale } from "@/components/locale-provider";
+import {
+  CapacityCertificateFields,
+  type CapacityDraft,
+} from "@/components/capacity-certificate-fields";
 
 export default function TrustWizardPage() {
   const { locale } = useLocale();
@@ -18,6 +22,14 @@ export default function TrustWizardPage() {
   const [enforcerIdNumber, setEnforcerIdNumber] = useState("");
   const [enforcerOrganization, setEnforcerOrganization] = useState("");
   const [minCoSignApprovals, setMinCoSignApprovals] = useState(2);
+  const [over75, setOver75] = useState(false);
+  const [capacity, setCapacity] = useState<CapacityDraft>({
+    over75OrFrail: false,
+    medicalCapacityAttached: false,
+    medicalCapacityDocumentName: null,
+    medicalCapacityDocumentPath: null,
+    birthYear: null,
+  });
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -26,6 +38,7 @@ export default function TrustWizardPage() {
     void (async () => {
       const res = await fetch("/api/vault/trust");
       const json = await res.json();
+      setOver75(Boolean(json.over75));
       const d = json.draft;
       if (!d) return;
       setTrustName(d.trustName || "");
@@ -38,6 +51,13 @@ export default function TrustWizardPage() {
       setEnforcerIdNumber(d.enforcerIdNumber || "");
       setEnforcerOrganization(d.enforcerOrganization || "");
       setMinCoSignApprovals(d.minCoSignApprovals || 2);
+      setCapacity({
+        over75OrFrail: Boolean(d.over75OrFrail),
+        medicalCapacityAttached: Boolean(d.medicalCapacityAttached),
+        medicalCapacityDocumentName: d.medicalCapacityDocumentName || null,
+        medicalCapacityDocumentPath: d.medicalCapacityDocumentPath || null,
+        birthYear: null,
+      });
     })();
   }, []);
 
@@ -61,6 +81,10 @@ export default function TrustWizardPage() {
           enforcerIdNumber,
           enforcerOrganization,
           minCoSignApprovals,
+          over75OrFrail: capacity.over75OrFrail,
+          medicalCapacityAttached: capacity.medicalCapacityAttached,
+          medicalCapacityDocumentName: capacity.medicalCapacityDocumentName,
+          medicalCapacityDocumentPath: capacity.medicalCapacityDocumentPath,
         }),
       });
       const json = await res.json();
@@ -126,6 +150,12 @@ export default function TrustWizardPage() {
           className="field max-w-xs"
           value={minCoSignApprovals}
           onChange={(e) => setMinCoSignApprovals(Number(e.target.value) || 2)}
+        />
+        <CapacityCertificateFields
+          locale={locale}
+          recommended={capacity.over75OrFrail || over75}
+          value={capacity}
+          onChange={setCapacity}
         />
         {error && <p className="text-[var(--danger)]">{error}</p>}
         {message && <p className="font-semibold text-forest">{message}</p>}

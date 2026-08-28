@@ -39,6 +39,10 @@ const assetSchema = z.object({
   blockNumber: z.string().optional().default(""),
   registrationSection: z.string().optional().default(""),
   landRegistryOffice: z.string().optional().default(""),
+  landOwnershipType: z
+    .enum(["", "sole_owner", "joint_tenancy", "tenancy_in_common"])
+    .optional()
+    .default(""),
   registrationNumber: z.string().optional().default(""),
   makeModel: z.string().optional().default(""),
   year: z.string().optional().default(""),

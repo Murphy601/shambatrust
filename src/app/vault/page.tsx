@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LandingPhoto } from "@/components/landing-photo";
+import { AdvocateAttestationBadge } from "@/components/advocate-attestation-badge";
+import { PhysicalVaultLocator } from "@/components/physical-vault-locator";
 import { isLandLike } from "@/lib/asset-fields";
 import { readSession } from "@/lib/auth/session";
 import {
@@ -24,6 +26,7 @@ import {
   ardhisasaStatusLabel,
   lookupParcelSummary,
 } from "@/lib/land-registry/verification";
+import { legalDocumentStatusLabel } from "@/lib/legal/attestation";
 
 export default async function VaultDashboardPage() {
   const session = await readSession();
@@ -246,6 +249,26 @@ export default async function VaultDashboardPage() {
         </ul>
       </section>
 
+      <section className="rounded-[0.45rem] border-2 border-border bg-surface p-5 sm:p-7">
+        <h2 className="text-2xl font-semibold text-forest-deep">
+          Physical vault &amp; emergency card
+        </h2>
+        <p className="mt-2 text-lg text-muted">
+          Tell the family where the paper originals live, then print a pocket
+          QR card for contacts, medical wishes, and the assigned LSK advocate.
+        </p>
+        <div className="mt-4">
+          <PhysicalVaultLocator
+            locale={owner?.locale === "sw" ? "sw" : "en"}
+            initialLocation={vault.physicalDocumentLocation}
+            initialContactName={vault.emergencyPrimaryContactName}
+            initialContactPhone={vault.emergencyPrimaryContactPhone}
+            initialMedical={vault.emergencyMedicalNotes}
+            hasCard={Boolean(vault.emergencyCardToken)}
+          />
+        </div>
+      </section>
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <PhotoCard
           href="/vault/assets"
@@ -404,9 +427,20 @@ export default async function VaultDashboardPage() {
                       : "Last will & testament"}
                 </span>
                 {" · "}
-                <span className="capitalize text-forest">
-                  {doc.status.replace("_", " ")}
+                <span className="font-semibold text-forest">
+                  {legalDocumentStatusLabel(doc.status, doc.stampedAt)}
                 </span>
+                {doc.stampedAt ? (
+                  <div className="mt-2">
+                    <AdvocateAttestationBadge
+                      advocateName={doc.stampAdvocateName}
+                      lskNumber={doc.stampLskNumber}
+                      stampRef={doc.stampRef}
+                      stampedAt={doc.stampedAt}
+                      statusLabel={legalDocumentStatusLabel(doc.status, doc.stampedAt)}
+                    />
+                  </div>
+                ) : null}
                 {doc.signatureName ? (
                   <div className="text-sm text-muted">
                     Signed by {doc.signatureName}

@@ -28,6 +28,8 @@ import type {
   Vault,
 } from "@/lib/db/types";
 import { BILLING_AMOUNTS_KES, FEE_SPLIT } from "@/lib/ops/billing";
+import { AdvocateAttestationBadge } from "@/components/advocate-attestation-badge";
+import { legalDocumentStatusLabel } from "@/lib/legal/attestation";
 
 type CasePayload = {
   review: ReviewRequest;
@@ -1215,7 +1217,9 @@ export default function AdvocateCasePage() {
             <li key={d.id} className="text-base">
               <span className="font-semibold">{d.title}</span> · {t.docTypes[d.type]}{" "}
               ·{" "}
-              <span className="capitalize text-forest">{d.status.replace(/_/g, " ")}</span>
+              <span className="font-semibold text-forest">
+                {legalDocumentStatusLabel(d.status, d.stampedAt)}
+              </span>
               {d.signatureName ? ` · signed: ${d.signatureName}` : ""}
               <div
                 className={`mt-1 text-sm font-semibold ${
@@ -1228,6 +1232,17 @@ export default function AdvocateCasePage() {
                     }${d.stampCounty ? ` · ${d.stampCounty}` : ""}`
                   : t.notStamped}
               </div>
+              {d.stampedAt ? (
+                <div className="mt-2">
+                  <AdvocateAttestationBadge
+                    advocateName={d.stampAdvocateName}
+                    lskNumber={d.stampLskNumber}
+                    stampRef={d.stampRef}
+                    stampedAt={d.stampedAt}
+                    statusLabel={legalDocumentStatusLabel(d.status, d.stampedAt)}
+                  />
+                </div>
+              ) : null}
               {d.stampNotes && (
                 <div className="text-sm text-muted">{d.stampNotes}</div>
               )}

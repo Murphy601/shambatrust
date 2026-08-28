@@ -4,6 +4,11 @@ import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { PlatformDisclaimer } from "@/components/platform-disclaimer";
 import { useLocale } from "@/components/locale-provider";
+import {
+  CapacityCertificateFields,
+  type CapacityDraft,
+} from "@/components/capacity-certificate-fields";
+import { isSeventyFiveOrOlder } from "@/lib/legal/capacity";
 
 const STEPS = 5;
 
@@ -26,6 +31,18 @@ export default function WillBuilderPage() {
   const [testamentaryTrustEnabled, setTestamentaryTrustEnabled] = useState(false);
   const [testamentaryTrustTerms, setTestamentaryTrustTerms] = useState("");
   const [minors, setMinors] = useState<Array<{ fullName: string; dateOfBirth: string }>>([]);
+  const [unallocatedCloseHeirs, setUnallocatedCloseHeirs] = useState<
+    Array<{ id: string; fullName: string; relationship: string }>
+  >([]);
+  const [birthYear, setBirthYear] = useState("");
+  const [disinheritanceExplanation, setDisinheritanceExplanation] = useState("");
+  const [capacity, setCapacity] = useState<CapacityDraft>({
+    over75OrFrail: false,
+    medicalCapacityAttached: false,
+    medicalCapacityDocumentName: null,
+    medicalCapacityDocumentPath: null,
+    birthYear: null,
+  });
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -50,8 +67,20 @@ export default function WillBuilderPage() {
         setNotes(d.notes || "");
         setTestamentaryTrustEnabled(Boolean(d.testamentaryTrustEnabled));
         setTestamentaryTrustTerms(d.testamentaryTrustTerms || "");
+        setDisinheritanceExplanation(d.disinheritanceExplanation || "");
+        setCapacity({
+          over75OrFrail: Boolean(d.over75OrFrail),
+          medicalCapacityAttached: Boolean(d.medicalCapacityAttached),
+          medicalCapacityDocumentName: d.medicalCapacityDocumentName || null,
+          medicalCapacityDocumentPath: d.medicalCapacityDocumentPath || null,
+          birthYear: json.birthYear ?? null,
+        });
       }
+      if (json.birthYear) setBirthYear(String(json.birthYear));
       if (Array.isArray(json.minors)) setMinors(json.minors);
+      if (Array.isArray(json.unallocatedCloseHeirs)) {
+        setUnallocatedCloseHeirs(json.unallocatedCloseHeirs);
+      }
     })();
   }, []);
 
@@ -79,6 +108,12 @@ export default function WillBuilderPage() {
           notes,
           testamentaryTrustEnabled,
           testamentaryTrustTerms,
+          over75OrFrail: capacity.over75OrFrail,
+          medicalCapacityAttached: capacity.medicalCapacityAttached,
+          medicalCapacityDocumentName: capacity.medicalCapacityDocumentName,
+          medicalCapacityDocumentPath: capacity.medicalCapacityDocumentPath,
+          disinheritanceExplanation,
+          birthYear: birthYear ? Number(birthYear) : null,
         }),
       });
       const json = await res.json();
@@ -121,6 +156,15 @@ export default function WillBuilderPage() {
             <input id="tid" className="field" value={testatorId} onChange={(e) => setTestatorId(e.target.value)} />
             <label className="field-label" htmlFor="pr">{sw ? "Makazi" : "Primary residence"}</label>
             <input id="pr" className="field" value={primaryResidence} onChange={(e) => setPrimaryResidence(e.target.value)} />
+            <label className="field-label" htmlFor="by">{sw ? "Mwaka wa kuzaliwa" : "Year of birth"}</label>
+            <input
+              id="by"
+              className="field max-w-xs"
+              inputMode="numeric"
+              placeholder="1948"
+              value={birthYear}
+              onChange={(e) => setBirthYear(e.target.value.replace(/\D/g, "").slice(0, 4))}
+            />
           </>
         )}
         {step === 2 && (
@@ -135,14 +179,43 @@ export default function WillBuilderPage() {
           </>
         )}
         {step === 3 && (
-          <p className="text-lg text-ink">
-            {sw
-              ? "Gawa mali kwenye ukurasa wa Warithi. Rudia hapa baada ya kugawa."
-              : "Assign plots and percentages on the Heirs page. Return here after you save allocations."}{" "}
-            <Link href="/vault/heirs" className="font-semibold text-forest underline">
-              {sw ? "Fungua warithi" : "Open heirs"}
-            </Link>
-          </p>
+          <>
+            <p className="text-lg text-ink">
+              {sw
+                ? "Gawa mali kwenye ukurasa wa Warithi. Rudia hapa baada ya kugawa."
+                : "Assign plots and percentages on the Heirs page. Return here after you save allocations."}{" "}
+              <Link href="/vault/heirs" className="font-semibold text-forest underline">
+                {sw ? "Fungua warithi" : "Open heirs"}
+              </Link>
+            </p>
+            {unallocatedCloseHeirs.length > 0 && (
+              <div className="rounded-[0.35rem] border-2 border-brass bg-[#fff8e8] p-4">
+                <p className="font-semibold text-forest-deep">
+                  {sw ? "Warithi wa karibu wasio na mgao" : "Close heirs with no gift"}
+                </p>
+                <p className="mt-1 text-base text-ink">
+                  {unallocatedCloseHeirs
+                    .map((h) => `${h.fullName} (${h.relationship})`)
+                    .join(", ")}
+                </p>
+                <p className="mt-2 text-base text-muted">
+                  {sw
+                    ? "Mahakama za Kenya mara nyingi zinabatilisha wosia unaoacha mke/mume au mtoto bila sababu. Andika sababu fupi ya ukweli."
+                    : "If you are deliberately excluding a legal heir, enter a short, factual explanation to protect the document against court challenges."}
+                </p>
+                <textarea
+                  className="field mt-3 min-h-[6rem]"
+                  value={disinheritanceExplanation}
+                  onChange={(e) => setDisinheritanceExplanation(e.target.value)}
+                  placeholder={
+                    sw
+                      ? "mf. Mwanangu Juma alipewa shamba hili mwaka 2018 wakati wa uhai."
+                      : "e.g. My son Juma already received this shamba by inter vivos gift in 2018."
+                  }
+                />
+              </div>
+            )}
+          </>
         )}
         {step === 4 && (
           <>
@@ -170,6 +243,14 @@ export default function WillBuilderPage() {
             </label>
             <label className="field-label" htmlFor="n">{sw ? "Maelezo kwa wakili" : "Notes for the advocate"}</label>
             <textarea id="n" className="field min-h-[6rem]" value={notes} onChange={(e) => setNotes(e.target.value)} />
+            <CapacityCertificateFields
+              locale={locale}
+              recommended={
+                capacity.over75OrFrail || isSeventyFiveOrOlder(Number(birthYear) || null)
+              }
+              value={{ ...capacity, birthYear: Number(birthYear) || null }}
+              onChange={setCapacity}
+            />
             {(testamentaryTrustEnabled || minors.length > 0) && (
               <div className="rounded-[0.35rem] border-2 border-brass p-4">
                 <p className="font-semibold text-forest-deep">

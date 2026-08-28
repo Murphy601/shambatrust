@@ -77,6 +77,8 @@ import {
   mergeTestamentaryTrustTerms,
 } from "@/lib/inheritance/minors";
 import { toKesEquivalent } from "@/lib/payments/fx";
+import { parseBirthYear } from "@/lib/legal/capacity";
+import { normalizeLandOwnership } from "@/lib/legal/ownership";
 import {
   inferArdhiSasaStatus,
   pendingSearchResult,
@@ -144,6 +146,7 @@ function normalizeAsset(a: Asset): Asset {
     blockNumber: a.blockNumber ?? "",
     registrationSection: a.registrationSection ?? "",
     landRegistryOffice: a.landRegistryOffice ?? "",
+    landOwnershipType: normalizeLandOwnership(a.landOwnershipType),
     saccoName: a.saccoName ?? "",
     saccoMemberNumber: a.saccoMemberNumber ?? "",
     saccoNominees: Array.isArray(a.saccoNominees) ? a.saccoNominees : [],
@@ -193,6 +196,12 @@ function normalizeWillDraft(d: WillDraft | null | undefined): WillDraft | null {
     testamentaryTrustEnabled: Boolean(d.testamentaryTrustEnabled),
     testamentaryTrustTerms: d.testamentaryTrustTerms ?? "",
     testamentaryTrustUntilAge: d.testamentaryTrustUntilAge ?? 18,
+    over75OrFrail: Boolean(d.over75OrFrail),
+    medicalCapacityAttached: Boolean(d.medicalCapacityAttached),
+    medicalCapacityDocumentName: d.medicalCapacityDocumentName ?? null,
+    medicalCapacityDocumentPath: d.medicalCapacityDocumentPath ?? null,
+    medicalCapacityUploadedAt: d.medicalCapacityUploadedAt ?? null,
+    disinheritanceExplanation: d.disinheritanceExplanation ?? "",
   };
 }
 
@@ -206,6 +215,11 @@ function normalizeTrustDraft(d: TrustDraft | null | undefined): TrustDraft | nul
     enforcerOrganization: d.enforcerOrganization ?? "",
     minCoSignApprovals:
       typeof d.minCoSignApprovals === "number" ? d.minCoSignApprovals : 2,
+    over75OrFrail: Boolean(d.over75OrFrail),
+    medicalCapacityAttached: Boolean(d.medicalCapacityAttached),
+    medicalCapacityDocumentName: d.medicalCapacityDocumentName ?? null,
+    medicalCapacityDocumentPath: d.medicalCapacityDocumentPath ?? null,
+    medicalCapacityUploadedAt: d.medicalCapacityUploadedAt ?? null,
   };
 }
 
@@ -303,6 +317,7 @@ function normalizeDb(parsed: Partial<Database>): Database {
     passportCountry: u.passportCountry ?? "",
     countryOfResidence: u.countryOfResidence ?? "",
     isDiaspora: Boolean(u.isDiaspora),
+    birthYear: parseBirthYear(u.birthYear),
   }));
   db.vaults = (db.vaults || []).map((v) => ({
     ...v,
@@ -317,6 +332,13 @@ function normalizeDb(parsed: Partial<Database>): Database {
     willDraft: normalizeWillDraft(v.willDraft),
     trustDraft: normalizeTrustDraft(v.trustDraft),
     burialWishes: normalizeBurialWishes(v.burialWishes),
+    physicalDocumentLocation: v.physicalDocumentLocation ?? "",
+    physicalDocumentUpdatedAt: v.physicalDocumentUpdatedAt ?? null,
+    emergencyCardToken: v.emergencyCardToken ?? null,
+    emergencyCardCreatedAt: v.emergencyCardCreatedAt ?? null,
+    emergencyMedicalNotes: v.emergencyMedicalNotes ?? "",
+    emergencyPrimaryContactName: v.emergencyPrimaryContactName ?? "",
+    emergencyPrimaryContactPhone: v.emergencyPrimaryContactPhone ?? "",
   }));
   db.titleLookups = (db.titleLookups || []).map((t) => ({
     ...t,
@@ -590,6 +612,7 @@ export async function createUser(input: {
     advocateOooUntil: null,
     advocateOooNote: "",
     ...blankDiasporaFields(),
+    birthYear: null,
     createdAt: new Date().toISOString(),
   };
   db.users.push(user);
@@ -611,6 +634,13 @@ export async function createUser(input: {
       willDraft: null,
       trustDraft: null,
       burialWishes: null,
+      physicalDocumentLocation: "",
+      physicalDocumentUpdatedAt: null,
+      emergencyCardToken: null,
+      emergencyCardCreatedAt: null,
+      emergencyMedicalNotes: "",
+      emergencyPrimaryContactName: "",
+      emergencyPrimaryContactPhone: "",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -709,6 +739,7 @@ export async function saveAsset(
     blockNumber: asset.blockNumber || "",
     registrationSection: asset.registrationSection || "",
     landRegistryOffice: asset.landRegistryOffice || "",
+    landOwnershipType: normalizeLandOwnership(asset.landOwnershipType),
     registrationNumber: asset.registrationNumber || "",
     makeModel: asset.makeModel || "",
     year: asset.year || "",
@@ -793,6 +824,12 @@ function applyMinorProtectionInDb(db: Database, vaultId: string): void {
       testamentaryTrustEnabled: true,
       testamentaryTrustTerms: terms,
       testamentaryTrustUntilAge: 18,
+      over75OrFrail: false,
+      medicalCapacityAttached: false,
+      medicalCapacityDocumentName: null,
+      medicalCapacityDocumentPath: null,
+      medicalCapacityUploadedAt: null,
+      disinheritanceExplanation: "",
       updatedAt: stamp,
     };
   } else {
@@ -1585,6 +1622,7 @@ export async function ensureAdminUser(input: {
     advocateOooUntil: null,
     advocateOooNote: "",
     ...blankDiasporaFields(),
+    birthYear: null,
     createdAt: new Date().toISOString(),
   };
   db.users.push(user);
@@ -2445,6 +2483,7 @@ export async function reviewAdvocateApplication(input: {
         advocateOooUntil: null,
         advocateOooNote: "",
         ...blankDiasporaFields(),
+        birthYear: null,
         createdAt: now,
       };
       db.users.push(user);
@@ -2668,6 +2707,74 @@ export async function updateUserPreferences(input: {
   }
   await writeDb(db);
   return user;
+}
+
+export async function updateOwnerBirthYear(
+  userId: string,
+  birthYear: number | null,
+): Promise<User | null> {
+  const db = await readDb();
+  const user = db.users.find((u) => u.id === userId);
+  if (!user) return null;
+  user.birthYear = parseBirthYear(birthYear);
+  await writeDb(db);
+  return user;
+}
+
+export async function saveVaultLocator(
+  vaultId: string,
+  input: {
+    physicalDocumentLocation?: string;
+    emergencyMedicalNotes?: string;
+    emergencyPrimaryContactName?: string;
+    emergencyPrimaryContactPhone?: string;
+    rotateEmergencyCard?: boolean;
+  },
+): Promise<{
+  physicalDocumentLocation: string;
+  physicalDocumentUpdatedAt: string | null;
+  emergencyCardToken: string | null;
+  emergencyCardCreatedAt: string | null;
+  emergencyMedicalNotes: string;
+  emergencyPrimaryContactName: string;
+  emergencyPrimaryContactPhone: string;
+}> {
+  const db = await readDb();
+  const vault = db.vaults.find((v) => v.id === vaultId);
+  if (!vault) throw new Error("Vault not found");
+  if (typeof input.physicalDocumentLocation === "string") {
+    vault.physicalDocumentLocation = input.physicalDocumentLocation.trim();
+    vault.physicalDocumentUpdatedAt = new Date().toISOString();
+  }
+  if (typeof input.emergencyMedicalNotes === "string") {
+    vault.emergencyMedicalNotes = input.emergencyMedicalNotes.trim();
+  }
+  if (typeof input.emergencyPrimaryContactName === "string") {
+    vault.emergencyPrimaryContactName = input.emergencyPrimaryContactName.trim();
+  }
+  if (typeof input.emergencyPrimaryContactPhone === "string") {
+    vault.emergencyPrimaryContactPhone = input.emergencyPrimaryContactPhone.trim();
+  }
+  if (input.rotateEmergencyCard || !vault.emergencyCardToken) {
+    vault.emergencyCardToken = newId().replace(/-/g, "").slice(0, 20);
+    vault.emergencyCardCreatedAt = new Date().toISOString();
+  }
+  vault.updatedAt = new Date().toISOString();
+  await writeDb(db);
+  return {
+    physicalDocumentLocation: vault.physicalDocumentLocation,
+    physicalDocumentUpdatedAt: vault.physicalDocumentUpdatedAt,
+    emergencyCardToken: vault.emergencyCardToken,
+    emergencyCardCreatedAt: vault.emergencyCardCreatedAt,
+    emergencyMedicalNotes: vault.emergencyMedicalNotes,
+    emergencyPrimaryContactName: vault.emergencyPrimaryContactName,
+    emergencyPrimaryContactPhone: vault.emergencyPrimaryContactPhone,
+  };
+}
+
+export async function findVaultByEmergencyToken(token: string) {
+  const db = await readDb();
+  return db.vaults.find((v) => v.emergencyCardToken && v.emergencyCardToken === token);
 }
 
 export async function updateAdvocateCounties(
@@ -3154,6 +3261,12 @@ export async function saveWillDraft(
     testamentaryTrustEnabled: Boolean(draft.testamentaryTrustEnabled),
     testamentaryTrustTerms: draft.testamentaryTrustTerms || "",
     testamentaryTrustUntilAge: draft.testamentaryTrustUntilAge || 18,
+    over75OrFrail: Boolean(draft.over75OrFrail),
+    medicalCapacityAttached: Boolean(draft.medicalCapacityAttached),
+    medicalCapacityDocumentName: draft.medicalCapacityDocumentName || null,
+    medicalCapacityDocumentPath: draft.medicalCapacityDocumentPath || null,
+    medicalCapacityUploadedAt: draft.medicalCapacityUploadedAt || null,
+    disinheritanceExplanation: draft.disinheritanceExplanation || "",
     updatedAt: new Date().toISOString(),
   };
   vault.willDraft = saved;
@@ -3176,6 +3289,11 @@ export async function saveTrustDraft(
     enforcerIdNumber: draft.enforcerIdNumber || "",
     enforcerOrganization: draft.enforcerOrganization || "",
     minCoSignApprovals: draft.minCoSignApprovals || 2,
+    over75OrFrail: Boolean(draft.over75OrFrail),
+    medicalCapacityAttached: Boolean(draft.medicalCapacityAttached),
+    medicalCapacityDocumentName: draft.medicalCapacityDocumentName || null,
+    medicalCapacityDocumentPath: draft.medicalCapacityDocumentPath || null,
+    medicalCapacityUploadedAt: draft.medicalCapacityUploadedAt || null,
     updatedAt: new Date().toISOString(),
   };
   vault.trustDraft = saved;
@@ -3580,6 +3698,11 @@ export async function executeConsensusProposal(input: {
         typeof payload.minCoSignApprovals === "number"
           ? payload.minCoSignApprovals
           : vault.trustDraft?.minCoSignApprovals || 2,
+      over75OrFrail: Boolean(vault.trustDraft?.over75OrFrail),
+      medicalCapacityAttached: Boolean(vault.trustDraft?.medicalCapacityAttached),
+      medicalCapacityDocumentName: vault.trustDraft?.medicalCapacityDocumentName ?? null,
+      medicalCapacityDocumentPath: vault.trustDraft?.medicalCapacityDocumentPath ?? null,
+      medicalCapacityUploadedAt: vault.trustDraft?.medicalCapacityUploadedAt ?? null,
       updatedAt: now,
     };
     vault.updatedAt = now;

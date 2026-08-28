@@ -1,4 +1,5 @@
 import type { SpokenLanguage } from "@/lib/languages";
+import type { LandOwnershipType } from "@/lib/legal/ownership";
 
 export type UserRole = "elder" | "agent" | "advocate" | "admin";
 
@@ -74,6 +75,8 @@ export type User = {
   passportCountry: string;
   countryOfResidence: string;
   isDiaspora: boolean;
+  /** Calendar year of birth — used to recommend a capacity certificate at 75+ */
+  birthYear: number | null;
   createdAt: string;
 };
 
@@ -105,6 +108,14 @@ export type Vault = {
   willDraft: WillDraft | null;
   trustDraft: TrustDraft | null;
   burialWishes: BurialWishes | null;
+  /** Where the family keeps the paper originals (safe, tin box, bank) */
+  physicalDocumentLocation: string;
+  physicalDocumentUpdatedAt: string | null;
+  emergencyCardToken: string | null;
+  emergencyCardCreatedAt: string | null;
+  emergencyMedicalNotes: string;
+  emergencyPrimaryContactName: string;
+  emergencyPrimaryContactPhone: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -141,6 +152,14 @@ export type WillDraft = {
   testamentaryTrustEnabled: boolean;
   testamentaryTrustTerms: string;
   testamentaryTrustUntilAge: number;
+  /** Elder is 75+ or frail — Law of Succession Act testamentary capacity */
+  over75OrFrail: boolean;
+  medicalCapacityAttached: boolean;
+  medicalCapacityDocumentName: string | null;
+  medicalCapacityDocumentPath: string | null;
+  medicalCapacityUploadedAt: string | null;
+  /** Factual reason if a spouse or child is left out of the Will */
+  disinheritanceExplanation: string;
   updatedAt: string;
 };
 
@@ -156,6 +175,11 @@ export type TrustDraft = {
   enforcerIdNumber: string;
   enforcerOrganization: string;
   minCoSignApprovals: number;
+  over75OrFrail: boolean;
+  medicalCapacityAttached: boolean;
+  medicalCapacityDocumentName: string | null;
+  medicalCapacityDocumentPath: string | null;
+  medicalCapacityUploadedAt: string | null;
   updatedAt: string;
 };
 
@@ -228,6 +252,8 @@ export type Asset = {
   blockNumber: string;
   registrationSection: string;
   landRegistryOffice: string;
+  /** Empty until the elder picks how the shamba is registered */
+  landOwnershipType: LandOwnershipType | "";
   // Vehicle
   registrationNumber: string;
   makeModel: string;

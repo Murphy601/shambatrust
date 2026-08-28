@@ -1,7 +1,16 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireVaultAccess } from "@/lib/vault-access";
-import { addAudit, listBeneficiaries, saveWillDraft } from "@/lib/db/store";
+import {
+  addAudit,
+  findUserById,
+  listAllocations,
+  listBeneficiaries,
+  saveWillDraft,
+  updateOwnerBirthYear,
+} from "@/lib/db/store";
+import { isSeventyFiveOrOlder } from "@/lib/legal/capacity";
+import { unallocatedCloseHeirs } from "@/lib/legal/heirs";
 
 const schema = z.object({
   testatorName: z.string().default(""),
@@ -19,6 +28,12 @@ const schema = z.object({
   testamentaryTrustEnabled: z.boolean().optional(),
   testamentaryTrustTerms: z.string().optional(),
   testamentaryTrustUntilAge: z.number().int().min(18).max(25).optional(),
+  over75OrFrail: z.boolean().optional(),
+  medicalCapacityAttached: z.boolean().optional(),
+  medicalCapacityDocumentName: z.string().nullable().optional(),
+  medicalCapacityDocumentPath: z.string().nullable().optional(),
+  disinheritanceExplanation: z.string().optional(),
+  birthYear: z.number().int().nullable().optional(),
 });
 
 export async function GET() {
@@ -27,9 +42,18 @@ export async function GET() {
     return NextResponse.json({ error: access.error }, { status: access.status });
   }
   const heirs = await listBeneficiaries(access.vault.id);
+  const allocations = await listAllocations(access.vault.id);
+  const owner = await findUserById(access.vault.ownerId);
   return NextResponse.json({
     draft: access.vault.willDraft,
     minors: heirs.filter((h) => h.isMinor),
+    unallocatedCloseHeirs: unallocatedCloseHeirs(heirs, allocations).map((h) => ({
+      id: h.id,
+      fullName: h.fullName,
+      relationship: h.relationship,
+    })),
+    birthYear: owner?.birthYear ?? null,
+    over75: isSeventyFiveOrOlder(owner?.birthYear),
   });
 }
 
@@ -43,8 +67,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Check the will details." }, { status: 400 });
   }
   const existing = access.vault.willDraft;
+  const { birthYear, ...willFields } = parsed.data;
+  if (birthYear !== undefined) {
+    await updateOwnerBirthYear(access.vault.ownerId, birthYear);
+  }
+  const attached = Boolean(
+    willFields.medicalCapacityAttached ?? existing?.medicalCapacityAttached,
+  );
   const draft = await saveWillDraft(access.vault.id, {
-    ...parsed.data,
+    ...willFields,
     testamentaryTrustEnabled:
       parsed.data.testamentaryTrustEnabled ??
       existing?.testamentaryTrustEnabled ??
@@ -55,6 +86,23 @@ export async function POST(request: Request) {
       parsed.data.testamentaryTrustUntilAge ??
       existing?.testamentaryTrustUntilAge ??
       18,
+    over75OrFrail: parsed.data.over75OrFrail ?? existing?.over75OrFrail ?? false,
+    medicalCapacityAttached: attached,
+    medicalCapacityDocumentName:
+      parsed.data.medicalCapacityDocumentName ??
+      existing?.medicalCapacityDocumentName ??
+      null,
+    medicalCapacityDocumentPath:
+      parsed.data.medicalCapacityDocumentPath ??
+      existing?.medicalCapacityDocumentPath ??
+      null,
+    medicalCapacityUploadedAt: parsed.data.medicalCapacityDocumentPath
+      ? new Date().toISOString()
+      : existing?.medicalCapacityUploadedAt ?? null,
+    disinheritanceExplanation:
+      parsed.data.disinheritanceExplanation ??
+      existing?.disinheritanceExplanation ??
+      "",
   });
   await addAudit({
     vaultId: access.vault.id,

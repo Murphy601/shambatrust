@@ -6,6 +6,7 @@ import { useLocale } from "@/components/locale-provider";
 import { formatPhoneDisplay } from "@/lib/auth/phone";
 import { vaultCopy } from "@/lib/vault-copy";
 import type { Allocation, Asset, Beneficiary, HouseholdHouse } from "@/lib/db/types";
+import { unallocatedCloseHeirs } from "@/lib/legal/heirs";
 
 export default function HeirsPage() {
   const { locale } = useLocale();
@@ -246,6 +247,16 @@ export default function HeirsPage() {
       {error && <p className="text-base font-medium text-[var(--danger)]">{error}</p>}
       {warning && <p className="text-base font-medium text-brass">{warning}</p>}
       {message && <p className="text-base font-medium text-forest">{message}</p>}
+      {unallocatedCloseHeirs(beneficiaries, allocations).length > 0 && (
+        <p className="rounded-[0.35rem] border-2 border-brass bg-[#fff8e8] px-4 py-3 text-base text-ink">
+          {sw
+            ? "Mke/mume au mtoto hana mgao. Andika sababu fupi kwenye wosia ili mahakama isibatilishe."
+            : "A spouse or child has no gift yet. Add a short factual reason in the Will builder so a court is less likely to overturn it."}{" "}
+          <Link href="/vault/will" className="font-semibold text-forest underline">
+            {sw ? "Fungua wosia" : "Open Will builder"}
+          </Link>
+        </p>
+      )}
 
       {!locked && (
         <form

@@ -1,7 +1,7 @@
 import { createHash } from "crypto";
 import path from "path";
 import PDFDocument from "pdfkit";
-import { PDFDocument as PdfLibDocument } from "pdf-lib";
+import { PDFDocument as PdfLibDocument, rgb, degrees, StandardFonts } from "pdf-lib";
 import type {
   Allocation,
   Asset,
@@ -38,6 +38,8 @@ import {
 import { spokenLanguageLabel } from "@/lib/languages";
 import { registerBinderFonts } from "@/lib/binder/fonts";
 import { ardhisasaStatusLabel, lookupParcelSummary } from "@/lib/land-registry/verification";
+import { landOwnershipLabel } from "@/lib/legal/ownership";
+import { legalDocumentStatusLabel } from "@/lib/legal/attestation";
 
 type Snapshot = {
   vault: Vault;
@@ -88,6 +90,14 @@ async function collectAttachments(snapshot: Snapshot): Promise<Attachment[]> {
 
   await push("National ID — front", snapshot.owner.idFrontPath);
   await push("National ID — back", snapshot.owner.idBackPath);
+  await push(
+    "Doctor’s certificate of capacity — will",
+    snapshot.vault.willDraft?.medicalCapacityDocumentPath,
+  );
+  await push(
+    "Doctor’s certificate of capacity — trust",
+    snapshot.vault.trustDraft?.medicalCapacityDocumentPath,
+  );
 
   for (const asset of snapshot.assets) {
     await push(`Asset deed — ${asset.title}`, asset.documentPath);
@@ -172,6 +182,10 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
     line("Email", snapshot.owner.email || "—");
     line("County", snapshot.owner.county || "—");
     line("Address", snapshot.owner.address || "—");
+    line("Year of birth", snapshot.owner.birthYear ? String(snapshot.owner.birthYear) : "—");
+    if (snapshot.vault.physicalDocumentLocation) {
+      line("Physical document location", snapshot.vault.physicalDocumentLocation);
+    }
     line("Profile complete", snapshot.owner.profileComplete ? "Yes" : "No");
 
     // Assets
@@ -192,6 +206,9 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
       }
       if (asset.landRegistryOffice) {
         line("County land registry", asset.landRegistryOffice);
+      }
+      if (asset.landOwnershipType) {
+        line("Ownership type", landOwnershipLabel(asset.landOwnershipType));
       }
       if (asset.county) line("County", asset.county);
       if (asset.subCounty) line("Sub-county", asset.subCounty);
@@ -279,6 +296,18 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
         will.witnessAcknowledged ? "Acknowledged" : "Not yet acknowledged",
       );
       if (will.notes) line("Notes", will.notes);
+      if (will.over75OrFrail) {
+        line("75+ / frail", "Acknowledged");
+      }
+      line(
+        "Capacity certificate",
+        will.medicalCapacityAttached
+          ? will.medicalCapacityDocumentName || "Attached"
+          : "Not attached",
+      );
+      if (will.disinheritanceExplanation) {
+        line("Disinheritance explanation", will.disinheritanceExplanation);
+      }
       if (will.testamentaryTrustEnabled) {
         line("Testamentary trust", `Until age ${will.testamentaryTrustUntilAge || 18}`);
         if (will.testamentaryTrustTerms) line("Trust terms", will.testamentaryTrustTerms);
@@ -405,7 +434,7 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
       doc.moveDown(0.5);
       doc
         .font(fonts.bold)
-        .text(`${d.title} (${d.type}) — ${d.status}`)
+        .text(`${d.title} (${d.type}) — ${legalDocumentStatusLabel(d.status, d.stampedAt)}`)
         .font(fonts.regular);
       if (d.stampRef) {
         line(
@@ -530,6 +559,7 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
 async function mergePdfAttachments(
   narrative: Buffer,
   pdfAttachments: Attachment[],
+  stamp?: { advocateName: string; lsk: string },
 ): Promise<{ buffer: Buffer; pageCount: number }> {
   const merged = await PdfLibDocument.load(narrative);
   for (const att of pdfAttachments) {
@@ -537,7 +567,6 @@ async function mergePdfAttachments(
       const bytes = att.bytes;
       const src = await PdfLibDocument.load(bytes, { ignoreEncryption: true });
       const pages = await merged.copyPages(src, src.getPageIndices());
-      // Cover page note before appended pages
       for (const page of pages) {
         merged.addPage(page);
       }
@@ -545,6 +574,46 @@ async function mergePdfAttachments(
       // Skip unreadable PDFs; narrative still lists them by name
     }
   }
+
+  const font = await merged.embedFont(StandardFonts.Helvetica);
+  for (const page of merged.getPages()) {
+    const { width, height } = page.getSize();
+    page.drawText("CONFIDENTIAL - SHAMBATRUST LEGAL DOSSIER", {
+      x: 48,
+      y: 16,
+      size: 8,
+      font,
+      color: rgb(0.45, 0.45, 0.45),
+      opacity: 0.55,
+    });
+    page.drawText("CONFIDENTIAL", {
+      x: width * 0.18,
+      y: height * 0.35,
+      size: 42,
+      font,
+      rotate: degrees(32),
+      color: rgb(0.55, 0.55, 0.55),
+      opacity: 0.12,
+    });
+    if (stamp?.lsk || stamp?.advocateName) {
+      const label = [
+        "LEGALLY ATTESTED",
+        stamp.advocateName,
+        stamp.lsk ? `LSK ${stamp.lsk}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      page.drawText(label, {
+        x: 48,
+        y: height - 22,
+        size: 8,
+        font,
+        color: rgb(0.12, 0.34, 0.19),
+        opacity: 0.85,
+      });
+    }
+  }
+
   const buffer = Buffer.from(await merged.save());
   return { buffer, pageCount: merged.getPageCount() };
 }
@@ -620,16 +689,10 @@ async function writeBinderPdf(snapshot: Snapshot): Promise<{
   const pdfs = attachments.filter((a) => a.kind === "pdf");
 
   const narrativeBuffer = await writeNarrativePdf(snapshot, images);
-  const final =
-    pdfs.length > 0
-      ? await mergePdfAttachments(narrativeBuffer, pdfs)
-      : await (async () => {
-          const loaded = await PdfLibDocument.load(narrativeBuffer);
-          return {
-            buffer: Buffer.from(await loaded.save()),
-            pageCount: loaded.getPageCount(),
-          };
-        })();
+  const final = await mergePdfAttachments(narrativeBuffer, pdfs, {
+    advocateName: snapshot.advocateName,
+    lsk: snapshot.advocate?.advocateLicense || "",
+  });
 
   const documentName = `ShambaTrust-Binder-${snapshot.owner.fullName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 40)}-v${snapshot.version}.pdf`;
   const relativePath = `binders/${snapshot.vault.id}-v${snapshot.version}-${Date.now()}.pdf`;
