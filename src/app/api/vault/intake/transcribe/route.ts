@@ -30,13 +30,11 @@ export async function POST(request: Request) {
 
   const mimeType = baseMimeType(file.type || "audio/webm") || "audio/webm";
   const filename = `amani-answer${audioExtension(mimeType)}`;
-  const language = form.get("locale") === "sw" ? "sw" : "en";
   const text = await groqTranscribeAudio({
     apiKey,
     bytes: await file.arrayBuffer(),
     filename,
     mimeType,
-    language,
   });
 
   return NextResponse.json({

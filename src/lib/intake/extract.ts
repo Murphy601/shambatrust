@@ -161,6 +161,64 @@ export function parseUtterance(
   return out;
 }
 
+export function constrainPatchToUtterance(
+  patch: Partial<IntakeDraft>,
+  utterance: string,
+): Partial<IntakeDraft> {
+  const hay = utterance.toLowerCase();
+  if (!hay.trim()) return {};
+  const out: Partial<IntakeDraft> = {};
+  const keys: Array<keyof IntakeDraft> = [
+    "fullName",
+    "nationalId",
+    "kraPin",
+    "spouseName",
+    "trusteeName",
+    "shambaLocation",
+    "lrNumber",
+    "plotSize",
+    "county",
+    "saccoName",
+    "saccoMemberNumber",
+    "bankName",
+    "accountNumber",
+    "mpesaNominee",
+    "mpesaNumber",
+  ];
+  for (const key of keys) {
+    const value = patch[key];
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (!trimmed) continue;
+    const tokens = trimmed
+      .toLowerCase()
+      .split(/[\s,/.-]+/)
+      .filter((token) => token.length > 2);
+    const substantial = tokens.filter((token) => token.length > 3);
+    const mentioned = hay.includes(trimmed.toLowerCase())
+      ? true
+      : substantial.length
+        ? substantial.every((token) => hay.includes(token))
+        : tokens.some((token) => hay.includes(token));
+    if (mentioned) (out[key] as string) = trimmed;
+  }
+  if (Array.isArray(patch.heirs)) {
+    out.heirs = patch.heirs.filter((heir) => {
+      const name = cleanName(heir);
+      if (!looksLikeName(name)) return false;
+      const tokens = name
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((token) => token.length > 3);
+      return tokens.length
+        ? tokens.every((token) => hay.includes(token))
+        : hay.includes(name.toLowerCase());
+    });
+  }
+  if (Array.isArray(patch.skippedFields)) out.skippedFields = patch.skippedFields;
+  return out;
+}
+
 export function mergeIntakeDraft(
   base: IntakeDraft,
   patch: Partial<IntakeDraft> | null | undefined,

@@ -1,7 +1,19 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getWorkerEnv } from "@/lib/cf-env";
-import { amaniSystemPrompt, GROQ_CHAT_URL, GROQ_MODEL, GROQ_WHISPER_MODEL, GROQ_WHISPER_PROMPT, GROQ_WHISPER_URL } from "@/lib/intake/prompt";
+import {
+  amaniSystemPrompt,
+  GROQ_CHAT_URL,
+  GROQ_MODEL,
+  GROQ_TTS_MAX_CHARS,
+  GROQ_TTS_MODEL,
+  GROQ_TTS_URL,
+  GROQ_TTS_VOICE,
+  GROQ_WHISPER_MODEL,
+  GROQ_WHISPER_PROMPT,
+  GROQ_WHISPER_URL,
+} from "@/lib/intake/prompt";
 import type { IntakeChatMessage, IntakeDraft } from "@/lib/intake/types";
+import { cleanWhisperResult } from "@/lib/intake/whisper-clean";
 
 function readKey(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -154,7 +166,6 @@ export async function groqTranscribeAudio(input: {
   bytes: ArrayBuffer;
   filename: string;
   mimeType: string;
-  language?: "en" | "sw";
 }): Promise<string | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 25_000);
@@ -168,9 +179,8 @@ export async function groqTranscribeAudio(input: {
     );
     form.set("model", GROQ_WHISPER_MODEL);
     form.set("prompt", GROQ_WHISPER_PROMPT);
-    form.set("response_format", "json");
+    form.set("response_format", "verbose_json");
     form.set("temperature", "0");
-    if (input.language) form.set("language", input.language);
     const res = await fetch(GROQ_WHISPER_URL, {
       method: "POST",
       headers: { Authorization: `Bearer ${input.apiKey}` },
@@ -181,13 +191,61 @@ export async function groqTranscribeAudio(input: {
       console.warn(JSON.stringify({ event: "groq_whisper_failed", status: res.status }));
       return null;
     }
-    const json = (await res.json()) as { text?: string };
-    const text = typeof json.text === "string" ? json.text.trim() : "";
-    return text || null;
+    const json = (await res.json()) as {
+      text?: string;
+      segments?: Array<{
+        text?: string;
+        avg_logprob?: number;
+        no_speech_prob?: number;
+        compression_ratio?: number;
+      }>;
+    };
+    return cleanWhisperResult(json);
   } catch (error) {
     console.warn(
       JSON.stringify({
         event: "groq_whisper_error",
+        name: error instanceof Error ? error.name : "unknown",
+      }),
+    );
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function groqSpeak(input: {
+  apiKey: string;
+  text: string;
+}): Promise<ArrayBuffer | null> {
+  const spoken = input.text.replace(/\s+/g, " ").trim().slice(0, GROQ_TTS_MAX_CHARS);
+  if (!spoken) return null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20_000);
+  try {
+    const res = await fetch(GROQ_TTS_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${input.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: GROQ_TTS_MODEL,
+        voice: GROQ_TTS_VOICE,
+        input: spoken,
+        response_format: "wav",
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      console.warn(JSON.stringify({ event: "groq_tts_failed", status: res.status }));
+      return null;
+    }
+    return await res.arrayBuffer();
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        event: "groq_tts_error",
         name: error instanceof Error ? error.name : "unknown",
       }),
     );

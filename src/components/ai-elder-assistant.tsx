@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import Link from "next/link";
 import { useLocale } from "@/components/locale-provider";
 import { audioExtension, preferredRecorderMimeType } from "@/lib/audio";
-import { speakAmani } from "@/lib/intake/amani-voice";
+import { speakAmani, stopAmaniVoice } from "@/lib/intake/amani-voice";
 import { mergeIntakeDraft, parseOcrText } from "@/lib/intake/extract";
 import { ocrImageText } from "@/lib/intake/ocr-client";
 import { emptyIntakeDraft, type IntakeChatMessage, type IntakeDraft, type IntakeStep } from "@/lib/intake/types";
@@ -69,7 +69,7 @@ function speechCtor(): SpeechCtor | null {
 }
 
 function speakText(text: string, locale: "en" | "sw") {
-  speakAmani(text, locale);
+  void speakAmani(text, locale);
 }
 
 function previewRows(draft: IntakeDraft, sw: boolean): Array<{ label: string; value: string }> {
@@ -112,9 +112,8 @@ export function AIElderAssistant() {
   const [readyToSubmit, setReadyToSubmit] = useState(false);
   const [micSupported] = useState(
     () =>
-      Boolean(speechCtor()) ||
-      (typeof MediaRecorder !== "undefined" &&
-        Boolean(navigator.mediaDevices?.getUserMedia)),
+      typeof MediaRecorder !== "undefined" &&
+      Boolean(navigator.mediaDevices?.getUserMedia),
   );
   const recRef = useRef<InstanceType<SpeechCtor> | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -183,7 +182,7 @@ export function AIElderAssistant() {
         /* already stopped */
       }
       streamRef.current?.getTracks().forEach((track) => track.stop());
-      if (typeof window !== "undefined") window.speechSynthesis?.cancel();
+      stopAmaniVoice();
     };
     // Opening greeting should speak once on first load.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -271,14 +270,13 @@ export function AIElderAssistant() {
       const rec = new Ctor();
       rec.lang = locale === "sw" ? "sw-KE" : "en-KE";
       rec.continuous = true;
-      rec.interimResults = true;
+      rec.interimResults = false;
       rec.onresult = (ev) => {
         let text = "";
         for (let i = 0; i < ev.results.length; i += 1) {
-          text += ev.results[i]?.[0]?.transcript || "";
+          if (ev.results[i]?.isFinal) text += ev.results[i]?.[0]?.transcript || "";
         }
-        transcriptRef.current = text.trim();
-        setInput(transcriptRef.current);
+        if (text.trim()) transcriptRef.current = text.trim();
       };
       rec.onerror = (ev) => {
         if (ev.error === "not-allowed") {
@@ -307,7 +305,7 @@ export function AIElderAssistant() {
   }
 
   async function startListening() {
-    if (typeof window !== "undefined") window.speechSynthesis?.cancel();
+    stopAmaniVoice();
     setError(null);
     transcriptRef.current = "";
     chunksRef.current = [];
@@ -343,6 +341,7 @@ export function AIElderAssistant() {
           recorder.start();
         }
         recorderRef.current = recorder;
+        return;
       } catch {
         stopTracks();
         setListening(false);
@@ -416,26 +415,39 @@ export function AIElderAssistant() {
       const blob = await waitForRecording();
       stopTracks();
       recorderRef.current = null;
-      let spoken = preview;
+      const hadRecording = Boolean(blob);
+      let spoken = "";
       if (blob) {
-        const accurate = await transcribeRecording(blob);
-        if (accurate) spoken = accurate;
+        spoken = await transcribeRecording(blob);
+      } else {
+        spoken = preview;
       }
       setInput(spoken);
       setOcrStatus(null);
       if (spoken) await sendTurn(spoken);
       else {
         setError(
-          sw
-            ? "Sikukusikia vizuri. Jaribu tena, polepole kidogo."
-            : "I did not catch that. Please try again, a little slower.",
+          hadRecording
+            ? sw
+              ? "Sikukusikia vizuri. Jaribu tena, polepole, au andika jibu."
+              : "I did not catch that clearly. Please try again slowly, or type the answer."
+            : sw
+              ? "Sikukusikia vizuri. Jaribu tena, polepole kidogo."
+              : "I did not catch that. Please try again, a little slower.",
         );
       }
     } catch {
       setOcrStatus(null);
-      if (preview) await sendTurn(preview);
-      else {
+      if (!preview) {
         setError(sw ? "Sikukusikia vizuri. Jaribu tena." : "I did not catch that. Please try again.");
+      } else if (!recorderRef.current) {
+        await sendTurn(preview);
+      } else {
+        setError(
+          sw
+            ? "Sikukusikia vizuri. Andika jibu ili kuepuka maneno ya kubahatisha."
+            : "I did not catch that clearly. Please type the answer so we do not guess.",
+        );
       }
     } finally {
       setBusy(false);
@@ -640,8 +652,8 @@ export function AIElderAssistant() {
               placeholder={
                 listening
                   ? sw
-                    ? "Endelea kuzungumza… bonyeza Nimeimaliza ukimaliza"
-                    : "Keep speaking… tap I’m done when you finish"
+                    ? "Inasikiliza… maneno yataandikwa ukimaliza, siyo wakati unazungumza."
+                    : "Listening… words are written after you finish, not while you speak."
                   : sw
                     ? "Andika hapa, au bonyeza mikrofoni"
                     : "Type here, or tap the microphone"
@@ -651,8 +663,8 @@ export function AIElderAssistant() {
             <p className="text-base text-muted">
               {listening
                 ? sw
-                  ? "Amani anasubiri. Ongea mpaka umalize, kisha bonyeza Nimeimaliza. Hatutakatiza katikati."
-                  : "Amani is waiting. Speak until you finish, then tap I’m done. We will not cut you off mid-sentence."
+                  ? "Amani anasubiri kimya. Ongea mpaka umalize, kisha Nimeimaliza. Hatutakisia maneno katikati."
+                  : "Amani is waiting quietly. Speak until you finish, then I’m done. We will not guess words while you talk."
                 : sw
                   ? "Bonyeza Sema jibu, ongea taratibu, kisha Nimeimaliza. Amani anajibu baada tu ya hapo."
                   : "Tap Speak Answer, talk at your own pace, then I’m done. Amani replies only after that."}
@@ -706,8 +718,8 @@ export function AIElderAssistant() {
                 onChange={(event) => setHearAmaniPreference(event.target.checked)}
               />
               {sw
-                ? "Soma jibu la Amani kwa sauti ya mwanamke (zimia kama inakatiza unapoongea)"
-                : "Read Amani’s replies aloud in a woman’s voice (turn off if she talks over you)"}
+                ? "Soma jibu la Amani kwa sauti (zimia kama inakatiza unapoongea)"
+                : "Read Amani’s replies aloud (turn off if she talks over you)"}
             </label>
           </form>
           {ocrStatus && <p className="mt-3 text-base text-forest">{ocrStatus}</p>}

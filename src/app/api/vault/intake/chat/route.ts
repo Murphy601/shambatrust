@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireVaultAccess } from "@/lib/vault-access";
 import { vaultContentLocked } from "@/lib/vault-lock";
 import { findUserById, listAssets, listBeneficiaries } from "@/lib/db/store";
-import { detectSwahili, mergeIntakeDraft, parseOcrText, parseUtterance, sanitizeDraft } from "@/lib/intake/extract";
+import { detectSwahili, mergeIntakeDraft, parseOcrText, parseUtterance, sanitizeDraft, constrainPatchToUtterance } from "@/lib/intake/extract";
 import { getGroqApiKey, groqIntakeTurn } from "@/lib/intake/groq";
 import { seedIntakeDraft } from "@/lib/intake/seed";
 import {
@@ -97,7 +97,8 @@ export async function POST(request: Request) {
       apiKey,
     });
     if (groq) {
-      const merged = mergeIntakeDraft(draft, groq.draftPatch, { overwrite: true });
+      const grounded = constrainPatchToUtterance(groq.draftPatch, utterance);
+      const merged = mergeIntakeDraft(draft, grounded, { overwrite: true });
       return NextResponse.json({
         reply: groq.reply,
         draft: merged,
