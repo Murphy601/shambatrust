@@ -9,6 +9,11 @@ import { formatDuration } from "@/lib/audio";
 import { advocateCopy } from "@/lib/advocate-copy";
 import { nomineeTotal, parcelIdentifiers } from "@/lib/asset-fields";
 import { ADVOCATE_SLA_NOTICE_EN, ADVOCATE_SLA_NOTICE_SW } from "@/lib/compliance/notices";
+import {
+  ARDHISASA_NOTICE_EN,
+  ardhisasaStatusLabel,
+  lookupParcelSummary,
+} from "@/lib/land-registry/verification";
 import type {
   Allocation,
   Asset,
@@ -115,6 +120,13 @@ export default function AdvocateCasePage() {
   const [lookupAssetId, setLookupAssetId] = useState("");
   const [lookupTitle, setLookupTitle] = useState("");
   const [lookupCounty, setLookupCounty] = useState("");
+  const [lookupParcel, setLookupParcel] = useState("");
+  const [lookupBlock, setLookupBlock] = useState("");
+  const [lookupSection, setLookupSection] = useState("");
+  const [lookupRegistry, setLookupRegistry] = useState("");
+  const [lookupNotes, setLookupNotes] = useState("");
+  const [lookupCertFile, setLookupCertFile] = useState<File | null>(null);
+  const [uploadLookupId, setUploadLookupId] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -166,6 +178,10 @@ export default function AdvocateCasePage() {
         setLookupAssetId(land.id);
         setLookupTitle(land.titleNumber || "");
         setLookupCounty(land.county || "");
+        setLookupParcel(land.parcelNumber || "");
+        setLookupBlock(land.blockNumber || "");
+        setLookupSection(land.registrationSection || "");
+        setLookupRegistry(land.landRegistryOffice || "");
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load");
@@ -296,7 +312,7 @@ export default function AdvocateCasePage() {
     }
   }
 
-  async function runLookup(event: FormEvent) {
+  async function openFiling(event: FormEvent) {
     event.preventDefault();
     if (!data) return;
     setBusy(true);
@@ -306,21 +322,115 @@ export default function AdvocateCasePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          action: "request",
           reviewId: id,
           vaultId: data.vault.id,
           assetId: lookupAssetId || null,
           titleNumber: lookupTitle,
           county: lookupCounty,
+          parcelNumber: lookupParcel,
+          blockNumber: lookupBlock,
+          registrationSection: lookupSection,
+          landRegistryOffice: lookupRegistry,
+          advocateNotes: lookupNotes,
         }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Lookup failed");
+      if (!res.ok) throw new Error(json.error || "Could not open filing");
       setMessage(
-        `${t.simulated}: ${json.lookup.result.found ? t.found : t.notFound} — ${json.lookup.result.registrationStatus}`,
+        "Filing opened: Pending Advocate Submission. Log into ArdhiSasa on your professional account to request owner OTP consent.",
       );
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Lookup failed");
+      setError(e instanceof Error ? e.message : "Could not open filing");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function markFiled(lookupId: string) {
+    if (!data) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/advocate/title-lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "mark_filed",
+          lookupId,
+          reviewId: id,
+          vaultId: data.vault.id,
+          advocateNotes: lookupNotes,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not mark filed");
+      setMessage("Marked filed. Waiting for the registered owner's OTP consent on ArdhiSasa.");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not mark filed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function withdrawFiling(lookupId: string) {
+    if (!data) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/advocate/title-lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "withdraw",
+          lookupId,
+          reviewId: id,
+          vaultId: data.vault.id,
+          advocateNotes: lookupNotes,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not withdraw");
+      setMessage("Filing withdrawn.");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not withdraw");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function uploadCertificate(event: FormEvent) {
+    event.preventDefault();
+    if (!data || !lookupCertFile) {
+      setError("Choose the official ArdhiSasa search PDF first.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.set("file", lookupCertFile);
+      form.set("vaultId", data.vault.id);
+      form.set("reviewId", id);
+      if (uploadLookupId) form.set("lookupId", uploadLookupId);
+      if (lookupAssetId) form.set("assetId", lookupAssetId);
+      if (lookupTitle) form.set("titleNumber", lookupTitle);
+      if (lookupCounty) form.set("county", lookupCounty);
+      if (lookupNotes) form.set("advocateNotes", lookupNotes);
+      const res = await fetch("/api/advocate/title-lookup", {
+        method: "POST",
+        body: form,
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Upload failed");
+      setMessage("Official search certificate stored in the elder's Document Vault.");
+      setLookupCertFile(null);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setBusy(false);
     }
@@ -843,11 +953,12 @@ export default function AdvocateCasePage() {
       <section className="rounded-[0.45rem] border-2 border-border bg-surface p-5 sm:p-7">
         <h2 className="text-2xl font-semibold text-forest-deep">{t.titleLookup}</h2>
         <p className="mt-2 text-base text-muted">{t.lookupHint}</p>
+        <p className="mt-2 text-base italic text-muted">{ARDHISASA_NOTICE_EN}</p>
         <p className="mt-2 text-base font-semibold text-brass">
-          Each new lookup charges KES{" "}
+          Each new filing request charges KES{" "}
           {BILLING_AMOUNTS_KES.title_lookup.toLocaleString()} to this vault.
         </p>
-        <form onSubmit={runLookup} className="mt-4 grid gap-4 sm:grid-cols-2">
+        <form onSubmit={openFiling} className="mt-4 grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <label className="field-label" htmlFor="lookupAsset">
               Linked land asset
@@ -862,13 +973,17 @@ export default function AdvocateCasePage() {
                 if (asset) {
                   setLookupTitle(asset.titleNumber || "");
                   setLookupCounty(asset.county || "");
+                  setLookupParcel(asset.parcelNumber || "");
+                  setLookupBlock(asset.blockNumber || "");
+                  setLookupSection(asset.registrationSection || "");
+                  setLookupRegistry(asset.landRegistryOffice || "");
                 }
               }}
             >
               <option value="">Manual entry</option>
               {landAssets.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.title} ({a.titleNumber || "no title #"})
+                  {a.title} ({a.titleNumber || a.parcelNumber || "no LR"})
                 </option>
               ))}
             </select>
@@ -882,7 +997,39 @@ export default function AdvocateCasePage() {
               className="field"
               value={lookupTitle}
               onChange={(e) => setLookupTitle(e.target.value)}
-              required
+            />
+          </div>
+          <div>
+            <label className="field-label" htmlFor="lookupParcel">
+              Parcel number
+            </label>
+            <input
+              id="lookupParcel"
+              className="field"
+              value={lookupParcel}
+              onChange={(e) => setLookupParcel(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="field-label" htmlFor="lookupBlock">
+              Parcel block number
+            </label>
+            <input
+              id="lookupBlock"
+              className="field"
+              value={lookupBlock}
+              onChange={(e) => setLookupBlock(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="field-label" htmlFor="lookupSection">
+              Registry section
+            </label>
+            <input
+              id="lookupSection"
+              className="field"
+              value={lookupSection}
+              onChange={(e) => setLookupSection(e.target.value)}
             />
           </div>
           <div>
@@ -896,30 +1043,120 @@ export default function AdvocateCasePage() {
               onChange={(e) => setLookupCounty(e.target.value)}
             />
           </div>
+          <div>
+            <label className="field-label" htmlFor="lookupRegistry">
+              County land registry office
+            </label>
+            <input
+              id="lookupRegistry"
+              className="field"
+              value={lookupRegistry}
+              onChange={(e) => setLookupRegistry(e.target.value)}
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="field-label" htmlFor="lookupNotes">
+              Filing notes (for the vault)
+            </label>
+            <textarea
+              id="lookupNotes"
+              className="field min-h-20"
+              value={lookupNotes}
+              onChange={(e) => setLookupNotes(e.target.value)}
+              placeholder="e.g. Filed on ArdhiSasa professional account; owner notified for OTP."
+            />
+          </div>
           <button type="submit" className="btn btn-primary" disabled={busy}>
             {t.runLookup}
           </button>
         </form>
+        <form onSubmit={uploadCertificate} className="mt-6 grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="field-label" htmlFor="uploadLookupId">
+              Attach PDF to an existing filing
+            </label>
+            <select
+              id="uploadLookupId"
+              className="field"
+              value={uploadLookupId}
+              onChange={(e) => setUploadLookupId(e.target.value)}
+            >
+              <option value="">Create a new filing with this upload</option>
+              {lookups
+                .filter((lu) => lu.status !== "withdrawn")
+                .map((lu) => (
+                  <option key={lu.id} value={lu.id}>
+                    {ardhisasaStatusLabel(lu.status)} · {lookupParcelSummary(lu) || lu.id}
+                  </option>
+                ))}
+            </select>
+          </div>
+          <div>
+            <label className="field-label" htmlFor="ardhiPdf">
+              Official ArdhiSasa search PDF
+            </label>
+            <input
+              id="ardhiPdf"
+              className="field"
+              type="file"
+              accept="application/pdf,.pdf"
+              onChange={(e) => setLookupCertFile(e.target.files?.[0] || null)}
+            />
+          </div>
+          <button type="submit" className="btn btn-secondary-dark" disabled={busy}>
+            {t.uploadCert}
+          </button>
+        </form>
         {lookups.length > 0 && (
           <ul className="mt-5 space-y-3">
-            {lookups.slice(0, 5).map((lu) => (
+            {lookups.slice(0, 8).map((lu) => (
               <li
                 key={lu.id}
                 className="rounded-[0.35rem] border border-border px-4 py-3 text-base"
               >
-                <span className="font-semibold">{lu.titleNumber}</span> —{" "}
-                {lu.result.found ? t.found : t.notFound} ·{" "}
-                {lu.result.registrationStatus}
-                {lu.result.ownerName ? ` · ${lu.result.ownerName}` : ""}
+                <p className="font-semibold text-forest-deep">
+                  {ardhisasaStatusLabel(lu.status)}
+                </p>
+                <p>{lookupParcelSummary(lu)}</p>
                 <div className="mt-1 font-semibold text-forest">
                   Cost: KES {lu.costKes.toLocaleString()}
                 </div>
+                {lu.advocateNotes ? (
+                  <div className="mt-1 text-sm text-muted">{lu.advocateNotes}</div>
+                ) : null}
                 <div className="mt-1 text-sm text-muted">{lu.result.rawNote}</div>
-                {lu.result.caveats.map((c) => (
-                  <div key={c} className="text-sm text-brass">
-                    {c}
-                  </div>
-                ))}
+                {lu.documentPath ? (
+                  <a
+                    className="mt-2 inline-block font-semibold text-forest underline"
+                    href={`/api/secure-docs/view?kind=title_search&lookupId=${lu.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    View official search certificate
+                  </a>
+                ) : null}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {lu.status === "pending_advocate_submission" ? (
+                    <button
+                      type="button"
+                      className="btn btn-secondary-dark"
+                      disabled={busy}
+                      onClick={() => void markFiled(lu.id)}
+                    >
+                      {t.markFiled}
+                    </button>
+                  ) : null}
+                  {lu.status !== "withdrawn" && lu.status !== "certificate_on_file" ? (
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={busy}
+                      onClick={() => void withdrawFiling(lu.id)}
+                    >
+                      {t.withdrawFiling}
+                    </button>
+                  ) : null}
+                </div>
               </li>
             ))}
           </ul>

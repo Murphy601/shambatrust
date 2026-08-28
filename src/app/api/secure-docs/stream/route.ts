@@ -35,6 +35,7 @@ export async function GET(request: Request) {
   const assetId = url.searchParams.get("assetId");
   const documentId = url.searchParams.get("documentId");
   const caseId = url.searchParams.get("caseId");
+  const lookupId = url.searchParams.get("lookupId");
   const token = url.searchParams.get("v");
 
   if (!token || !(await validateViewToken(token, session.userId))) {
@@ -61,6 +62,8 @@ export async function GET(request: Request) {
       assetId: assetId || "",
       reviewId,
     };
+  } else if (kind === "title_search") {
+    target = { kind: "title_search" as const, lookupId: lookupId || "" };
   } else if (kind === "legal") {
     target = {
       kind: "legal" as const,

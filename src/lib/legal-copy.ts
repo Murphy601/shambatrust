@@ -52,7 +52,7 @@ const terms: Record<Locale, LegalDoc> = {
       {
         heading: "6. No guarantees of land outcomes",
         body: [
-          "We do not guarantee Ministry of Lands outcomes, absence of caveats, or that courts will uphold any plan. Title lookups shown in demos or tools may be simulated until live registry integrations are enabled. Always rely on official searches and advocate advice for high-stakes decisions.",
+          "We do not guarantee Ministry of Lands outcomes, absence of caveats, or that courts will uphold any plan. ShambaTrust cannot query ArdhiSasa automatically — the Ministry does not provide a public third-party API. Official searches require an LSK partner advocate to file on their professional account and the registered owner's OTP consent. Always rely on the official search PDF stored in the vault and advocate advice for high-stakes decisions.",
         ],
       },
       {
@@ -340,7 +340,7 @@ const faqs: Record<
       },
       {
         q: "How much does it cost?",
-        a: "Packages are charged at legal-review submit. Amendments can be free within 48h then a smaller fee. Each title / ArdhiSasa search is billed separately. See homepage pricing.",
+        a: "Packages are charged at legal-review submit. Amendments can be free within 48h then a smaller fee. Each advocate-filed ArdhiSasa search is billed separately (~KES 1,500). See homepage pricing.",
       },
       {
         q: "Do you work in Swahili?",

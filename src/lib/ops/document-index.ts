@@ -7,6 +7,7 @@ import {
   listEldersNewestFirst,
   listLegalDocuments,
   listReviewRequests,
+  listTitleLookups,
   listVaultBinders,
 } from "@/lib/db/store";
 
@@ -101,7 +102,7 @@ export async function listOpsDocumentIndex(query = ""): Promise<{
     };
 
     if (vault) {
-      const [assets, legalDocs, reviews, binders, testaments, heirs, allocations] = await Promise.all([
+      const [assets, legalDocs, reviews, binders, testaments, heirs, allocations, lookups] = await Promise.all([
         listAssets(vault.id),
         listLegalDocuments(vault.id),
         listReviewRequests(vault.id),
@@ -109,6 +110,7 @@ export async function listOpsDocumentIndex(query = ""): Promise<{
         listAudioTestaments(vault.id),
         listBeneficiaries(vault.id),
         listAllocations(vault.id),
+        listTitleLookups(vault.id),
       ]);
       const reviewId = [...reviews].sort((a, b) =>
         b.createdAt.localeCompare(a.createdAt),
@@ -158,6 +160,26 @@ export async function listOpsDocumentIndex(query = ""): Promise<{
             ? `/api/secure-docs/view?kind=legal&reviewId=${reviewId}&documentId=${doc.id}`
             : null,
           downloadUrl: null,
+        });
+      }
+
+      for (const lookup of lookups) {
+        searchHay += ` ${lookup.titleNumber} ${lookup.parcelNumber} ${lookup.documentName || ""}`;
+        if (!lookup.documentPath) continue;
+        fileCount += 1;
+        pending.push({
+          key: `title_search:${lookup.id}`,
+          elderId: user.id,
+          elderName: user.fullName,
+          phone: user.phone,
+          vaultId: vault.id,
+          title: lookup.documentName || `ArdhiSasa search · ${lookup.titleNumber || lookup.parcelNumber}`,
+          type: "ArdhiSasa official search",
+          source: "LSK advocate filing",
+          uploadedAt: lookup.certificateUploadedAt || lookup.updatedAt || lookup.createdAt,
+          status: lookup.status.replace(/_/g, " "),
+          viewUrl: `/api/secure-docs/view?kind=title_search&lookupId=${lookup.id}`,
+          downloadUrl: `/api/secure-docs/view?kind=title_search&lookupId=${lookup.id}`,
         });
       }
 

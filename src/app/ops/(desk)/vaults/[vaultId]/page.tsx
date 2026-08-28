@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { formatDuration } from "@/lib/audio";
 import { nomineeTotal, parcelIdentifiers } from "@/lib/asset-fields";
+import { ardhisasaStatusLabel, lookupParcelSummary } from "@/lib/land-registry/verification";
 import type {
   Allocation,
   Asset,
@@ -740,21 +741,28 @@ export default function OpsVaultPage() {
       </section>
 
       <section className="rounded border border-[#3d4a40] bg-[#121a16] p-5">
-        <h2 className="text-xl font-semibold">7. Title lookups</h2>
+        <h2 className="text-xl font-semibold">7. ArdhiSasa filings</h2>
         <ul className="mt-3 space-y-2 text-sm">
           {data.lookups.map((lookup) => (
             <li key={lookup.id}>
-              {lookup.titleNumber}
-              {lookup.result
-                ? ` · ${lookup.result.found ? "Found" : "Not found"} · ${lookup.result.registrationStatus}`
-                : " · pending"}
-              {lookup.result?.ownerName
-                ? ` · registry owner ${lookup.result.ownerName}`
-                : ""}
+              {ardhisasaStatusLabel(lookup.status)} · {lookupParcelSummary(lookup)}
+              {lookup.documentPath ? (
+                <>
+                  {" · "}
+                  <a
+                    className="text-[#d4a574] underline"
+                    href={`/api/secure-docs/view?kind=title_search&lookupId=${lookup.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    view certificate
+                  </a>
+                </>
+              ) : null}
             </li>
           ))}
           {data.lookups.length === 0 && (
-            <li className="text-[#9aa89c]">No title lookups recorded.</li>
+            <li className="text-[#9aa89c]">No ArdhiSasa filings recorded.</li>
           )}
         </ul>
       </section>

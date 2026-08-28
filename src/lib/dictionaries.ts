@@ -245,7 +245,7 @@ export const dictionaries = {
           body: "Multi-asset estate, trusts, premium consult. Same rule: drafts free until submit.",
         },
       ],
-      note: "Amendments: free within 48 hours of submit, then a smaller amendment fee (not a full new package). Each ArdhiSasa / title lookup is billed per search (~KES 1,500).",
+      note: "Amendments: free within 48 hours of submit, then a smaller amendment fee (not a full new package). Each advocate-filed ArdhiSasa search is billed per filing (~KES 1,500).",
     },
     lead: {
       title: "Start securing your family shamba today",
@@ -534,7 +534,7 @@ export const dictionaries = {
           body: "Mali nyingi, amana, ushauri wa juu. Kanuni ileile: rasimu bure hadi uwasilishe.",
         },
       ],
-      note: "Marekebisho: bure ndani ya saa 48 baada ya kuwasilisha, kisha ada ndogo ya marekebisho. Kila utafutaji wa ArdhiSasa / hati ~KES 1,500.",
+      note: "Marekebisho: bure ndani ya saa 48 baada ya kuwasilisha, kisha ada ndogo ya marekebisho. Kila uwasilishaji wa ArdhiSasa na wakili ~KES 1,500.",
     },
     lead: {
       title: "Anza kulinda urithi wako",

@@ -11,7 +11,7 @@ const ITEMS = {
     },
     {
       q: "How does ShambaTrust integrate with ArdhiSasa land searches?",
-      a: "Your advocate can request a title / encumbrance check against Kenya’s digital land system (ArdhiSasa) using the LR number you stored. Each search is billed separately. Results sit next to the deed scan in your vault.",
+      a: "The Ministry of Lands does not offer a public API, so ShambaTrust never runs a live title search. You capture the title/LR, parcel, block, registry section, and ArdhiSasa account ID. A partner LSK advocate then files the search on their professional ArdhiSasa account. The registered owner must consent by OTP on ArdhiSasa itself. The advocate uploads the official digital search PDF into your Document Vault. Status starts as Pending Advocate Submission.",
     },
     {
       q: "What happens to my M-Pesa and SACCO savings if I don't leave a will?",
@@ -29,7 +29,7 @@ const ITEMS = {
     },
     {
       q: "ShambaTrust inaunganishwaje na ArdhiSasa?",
-      a: "Wakili anaweza kuomba ukaguzi wa hati / encumbrance kwenye mfumo wa kidijitali wa ardhi kwa nambari ya LR uliyohifadhi. Kila utafutaji unatozwa tofauti. Matokeo yanakaa kando ya skani ya hati.",
+      a: "Wizara ya Ardhi haitoi API ya umma, kwa hivyo ShambaTrust haiendi utafutaji wa moja kwa moja. Unahifadhi nambari ya hati/LR, kiwanja, block, sehemu ya usajili, na ArdhiSasa ID. Wakili mshirika wa LSK anawasilisha ombi kwenye akaunti yake ya kitaalamu. Mmiliki lazima aidhinishe kwa OTP kwenye ArdhiSasa. Wakili anapakia PDF rasmi kwenye hifadhi yako. Hali huanza kama Inasubiri uwasilishaji wa wakili.",
     },
     {
       q: "M-Pesa na SACCO zinaenda wapi bila wosia?",

@@ -32,7 +32,6 @@ import type {
   SuccessionCaseStatus,
   SupportSession,
   TitleLookupRecord,
-  TitleLookupResult,
   User,
   Vault,
   VaultBinder,
@@ -78,6 +77,10 @@ import {
   mergeTestamentaryTrustTerms,
 } from "@/lib/inheritance/minors";
 import { toKesEquivalent } from "@/lib/payments/fx";
+import {
+  inferArdhiSasaStatus,
+  pendingSearchResult,
+} from "@/lib/land-registry/verification";
 import { attemptCheckoutGateway } from "@/lib/payments/gateways";
 
 export {
@@ -321,6 +324,20 @@ function normalizeDb(parsed: Partial<Database>): Database {
     costKes: t.costKes ?? amountForBillingEvent("title_lookup"),
     ardhiSasaId: t.ardhiSasaId ?? "",
     ecitizenId: t.ecitizenId ?? "",
+    parcelNumber: t.parcelNumber ?? "",
+    blockNumber: t.blockNumber ?? "",
+    registrationSection: t.registrationSection ?? "",
+    landRegistryOffice: t.landRegistryOffice ?? "",
+    advocateNotes: t.advocateNotes ?? "",
+    documentName: t.documentName ?? null,
+    documentPath: t.documentPath ?? null,
+    filedAt: t.filedAt ?? null,
+    certificateUploadedAt: t.certificateUploadedAt ?? null,
+    updatedAt: t.updatedAt ?? t.createdAt,
+    result: t.result
+      ? { ...t.result, simulated: Boolean(t.result.simulated) }
+      : pendingSearchResult(),
+    status: inferArdhiSasaStatus(t),
   }));
   db.reviewRequests = (db.reviewRequests || []).map(normalizeReview);
   db.assets = (db.assets || []).map(normalizeAsset);
@@ -1302,15 +1319,20 @@ export async function saveTitleLookup(input: {
   assetId: string | null;
   titleNumber: string;
   county: string;
-  result: TitleLookupResult;
   requestedByUserId: string;
   reviewRequestId?: string | null;
   costKes?: number;
   ardhiSasaId?: string;
   ecitizenId?: string;
+  parcelNumber?: string;
+  blockNumber?: string;
+  registrationSection?: string;
+  landRegistryOffice?: string;
+  advocateNotes?: string;
 }): Promise<TitleLookupRecord> {
   const db = await readDb();
   const costKes = input.costKes ?? amountForBillingEvent("title_lookup");
+  const now = new Date().toISOString();
   const record: TitleLookupRecord = {
     id: newId(),
     vaultId: input.vaultId,
@@ -1318,12 +1340,23 @@ export async function saveTitleLookup(input: {
     reviewRequestId: input.reviewRequestId ?? null,
     titleNumber: input.titleNumber,
     county: input.county,
-    result: input.result,
+    parcelNumber: input.parcelNumber || "",
+    blockNumber: input.blockNumber || "",
+    registrationSection: input.registrationSection || "",
+    landRegistryOffice: input.landRegistryOffice || "",
+    result: pendingSearchResult(),
     requestedByUserId: input.requestedByUserId,
     costKes,
     ardhiSasaId: input.ardhiSasaId || "",
     ecitizenId: input.ecitizenId || "",
-    createdAt: new Date().toISOString(),
+    status: "pending_advocate_submission",
+    advocateNotes: input.advocateNotes || "",
+    documentName: null,
+    documentPath: null,
+    filedAt: null,
+    certificateUploadedAt: null,
+    createdAt: now,
+    updatedAt: now,
   };
   db.titleLookups.push(record);
   db.billingRecords.push({
@@ -1331,7 +1364,7 @@ export async function saveTitleLookup(input: {
     vaultId: input.vaultId,
     actorUserId: input.requestedByUserId,
     kind: "title_lookup",
-    detail: `Title ${input.titleNumber || "(none)"} · ${input.county}`,
+    detail: `ArdhiSasa filing request · ${input.titleNumber || "(no LR)"} · ${input.county}`,
     amountKes: costKes,
     currency: "KES",
     provider: "till",
@@ -1339,10 +1372,65 @@ export async function saveTitleLookup(input: {
     paidAt: null,
     paidByUserId: null,
     relatedId: record.id,
-    createdAt: record.createdAt,
+    createdAt: now,
   });
   await writeDb(db);
   return record;
+}
+
+export async function getTitleLookup(
+  id: string,
+): Promise<TitleLookupRecord | undefined> {
+  const db = await readDb();
+  return db.titleLookups.find((t) => t.id === id);
+}
+
+export async function updateTitleLookup(input: {
+  id: string;
+  status?: TitleLookupRecord["status"];
+  advocateNotes?: string;
+  documentName?: string | null;
+  documentPath?: string | null;
+  reviewRequestId?: string | null;
+}): Promise<TitleLookupRecord | null> {
+  const db = await readDb();
+  const row = db.titleLookups.find((t) => t.id === input.id);
+  if (!row) return null;
+  const now = new Date().toISOString();
+  if (input.status) row.status = input.status;
+  if (typeof input.advocateNotes === "string") row.advocateNotes = input.advocateNotes;
+  if (input.reviewRequestId !== undefined) {
+    row.reviewRequestId = input.reviewRequestId;
+  }
+  if (input.documentName !== undefined) row.documentName = input.documentName;
+  if (input.documentPath !== undefined) row.documentPath = input.documentPath;
+  if (input.status === "awaiting_owner_consent" && !row.filedAt) {
+    row.filedAt = now;
+    row.result = {
+      ...row.result,
+      simulated: false,
+      registrationStatus: "awaiting_owner_consent",
+      rawNote:
+        "Advocate filed this search on their ArdhiSasa professional account. Waiting for the registered owner's OTP consent.",
+      checkedAt: now,
+    };
+  }
+  if (input.documentPath) {
+    row.status = "certificate_on_file";
+    row.certificateUploadedAt = now;
+    row.result = {
+      ...row.result,
+      simulated: false,
+      found: true,
+      registrationStatus: "certificate_on_file",
+      rawNote:
+        "Official ArdhiSasa search certificate uploaded to the vault. This is not a live registry query.",
+      checkedAt: now,
+    };
+  }
+  row.updatedAt = now;
+  await writeDb(db);
+  return row;
 }
 
 export async function listAllTitleLookups(): Promise<TitleLookupRecord[]> {

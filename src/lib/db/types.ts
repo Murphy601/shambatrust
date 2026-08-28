@@ -389,7 +389,8 @@ export type AudioTestament = {
 
 export type TitleLookupResult = {
   found: boolean;
-  simulated: true;
+  /** True only on pre-2026 demo rows. New searches are never simulated. */
+  simulated: boolean;
   ownerName: string | null;
   registrationStatus: string;
   approximateLocation: string | null;
@@ -398,6 +399,13 @@ export type TitleLookupResult = {
   rawNote: string;
 };
 
+export type ArdhiSasaVerificationStatus =
+  | "pending_advocate_submission"
+  | "awaiting_owner_consent"
+  | "certificate_on_file"
+  | "withdrawn"
+  | "legacy_simulated";
+
 export type TitleLookupRecord = {
   id: string;
   vaultId: string;
@@ -405,12 +413,23 @@ export type TitleLookupRecord = {
   reviewRequestId: string | null;
   titleNumber: string;
   county: string;
+  parcelNumber: string;
+  blockNumber: string;
+  registrationSection: string;
+  landRegistryOffice: string;
   result: TitleLookupResult;
   requestedByUserId: string;
   costKes: number;
   ardhiSasaId: string;
   ecitizenId: string;
+  status: ArdhiSasaVerificationStatus;
+  advocateNotes: string;
+  documentName: string | null;
+  documentPath: string | null;
+  filedAt: string | null;
+  certificateUploadedAt: string | null;
   createdAt: string;
+  updatedAt: string;
 };
 
 export type CheckoutCurrency = "KES" | "USD" | "GBP" | "EUR";

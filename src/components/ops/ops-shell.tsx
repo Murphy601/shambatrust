@@ -23,7 +23,7 @@ export function OpsShell({
     ["/ops/elders", "Elders"],
     ["/ops/documents", "Documents"],
     ["/ops/billing", "Billing"],
-    ["/ops/title-lookups", "Titles"],
+    ["/ops/title-lookups", "ArdhiSasa"],
     ["/ops/advocates", "Applications"],
     ["/ops/advocates-crm", "CRM"],
     ["/ops/succession", "Succession"],

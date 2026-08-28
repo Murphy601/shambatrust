@@ -196,7 +196,7 @@ export default function OpsOverviewPage() {
             ["/ops/alerts", "Alerts & notices"],
             ["/ops/dpo", "DPO / DSAR"],
             ["/ops/intake", "WhatsApp intake"],
-            ["/ops/title-lookups", "Title ledger"],
+            ["/ops/title-lookups", "ArdhiSasa filings"],
             ["/ops/advocates-crm", "Advocate CRM"],
             ["/ops/retention", "Doc retention"],
             ["/ops/advocates", "Applications"],

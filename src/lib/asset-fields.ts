@@ -11,7 +11,7 @@ export function nomineeTotal(nominees: SaccoNominee[]): number {
 }
 
 /**
- * ArdhiSasa parcel identifiers in the order the registry search expects them.
+ * ArdhiSasa parcel identifiers an LSK advocate needs to file a professional search.
  * Returns an empty list for non-land assets.
  */
 export function parcelIdentifiers(

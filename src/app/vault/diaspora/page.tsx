@@ -4,7 +4,15 @@ import { useEffect, useState, type FormEvent } from "react";
 import { PlatformDisclaimer } from "@/components/platform-disclaimer";
 import { useLocale } from "@/components/locale-provider";
 import { CHECKOUT_DEFAULTS_KES, fromKes } from "@/lib/payments/fx";
+import { isLandLike } from "@/lib/asset-fields";
+import {
+  ARDHISASA_NOTICE_EN,
+  ARDHISASA_NOTICE_SW,
+  ardhisasaStatusLabel,
+  lookupParcelSummary,
+} from "@/lib/land-registry/verification";
 import type {
+  Asset,
   CheckoutCurrency,
   CheckoutKind,
   ConsultBooking,
@@ -40,6 +48,12 @@ export default function DiasporaBridgePage() {
   const [notaryNotes, setNotaryNotes] = useState("");
   const [titleNumber, setTitleNumber] = useState("");
   const [county, setCounty] = useState("");
+  const [parcelNumber, setParcelNumber] = useState("");
+  const [blockNumber, setBlockNumber] = useState("");
+  const [registrationSection, setRegistrationSection] = useState("");
+  const [landRegistryOffice, setLandRegistryOffice] = useState("");
+  const [lookupAssetId, setLookupAssetId] = useState("");
+  const [assets, setAssets] = useState<Asset[]>([]);
   const [currency, setCurrency] = useState<CheckoutCurrency>("USD");
   const [kind, setKind] = useState<CheckoutKind>("advocate_fee");
   const [amount, setAmount] = useState("");
@@ -69,6 +83,7 @@ export default function DiasporaBridgePage() {
     setBookings(json.bookings || []);
     setCheckouts(json.checkouts || []);
     setLookups(json.lookups || []);
+    setAssets(json.assets || []);
     if (!advocateId && json.advocates?.[0]) setAdvocateId(json.advocates[0].id);
   }
 
@@ -140,25 +155,32 @@ export default function DiasporaBridgePage() {
     await load();
   }
 
-  async function runLookup(event: FormEvent) {
+  async function requestAdvocateFiling(event: FormEvent) {
     event.preventDefault();
     setError(null);
     setMessage(null);
     const res = await fetch("/api/vault/diaspora/title-lookup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ titleNumber, county }),
+      body: JSON.stringify({
+        titleNumber,
+        county,
+        assetId: lookupAssetId || null,
+        parcelNumber,
+        blockNumber,
+        registrationSection,
+        landRegistryOffice,
+      }),
     });
     const json = await res.json();
     if (!res.ok) {
-      setError(json.error || "Lookup failed");
+      setError(json.error || "Could not request filing");
       return;
     }
-    const status = json.lookup?.result?.registrationStatus || "checked";
     setMessage(
       sw
-        ? `Utafutaji wa ArdhiSasa (mfano): ${status}`
-        : `Simulated ArdhiSasa search: ${status}`,
+        ? "Ombi limehifadhiwa: Inasubiri uwasilishaji wa wakili."
+        : "Request saved: Pending Advocate Submission.",
     );
     await load();
   }
@@ -202,8 +224,8 @@ export default function DiasporaBridgePage() {
         </h1>
         <p className="mt-2 text-lg text-muted">
           {sw
-            ? "Wakenya nje ya nchi wanaweza kuunganisha kitambulisho, ArdhiSasa, video notarization, na malipo ya sarafu nyingi."
-            : "Kenyans abroad can link IDs, run a title search, schedule video attestation with an LSK advocate, and pay in USD, GBP, EUR, or KES."}
+            ? "Wakenya nje ya nchi wanaweza kuunganisha kitambulisho, kuomba wakili wa LSK kuwasilisha utafutaji wa ArdhiSasa, video notarization, na malipo ya sarafu nyingi."
+            : "Kenyans abroad can link IDs, ask an LSK advocate to file an ArdhiSasa search, schedule video attestation, and pay in USD, GBP, EUR, or KES."}
         </p>
       </div>
       <PlatformDisclaimer sw={sw} />
@@ -301,37 +323,115 @@ export default function DiasporaBridgePage() {
       </form>
 
       <form
-        onSubmit={runLookup}
+        onSubmit={requestAdvocateFiling}
         className="space-y-4 rounded-[0.45rem] border-2 border-border bg-surface p-5 sm:p-7"
       >
         <h2 className="text-2xl font-semibold text-forest-deep">
-          {sw ? "Utafutaji wa ArdhiSasa / eCitizen" : "ArdhiSasa / eCitizen title search"}
+          {sw ? "Uthibitisho wa ArdhiSasa" : "ArdhiSasa verification"}
         </h2>
-        <p className="text-base text-muted">
-          {sw
-            ? "Hii ni daraja lililoandaliwa. Utafutaji rasmi wa Wizara unahitaji siri za API — kwa sasa matokeo ni mfano ulioandikwa."
-            : "Prepared bridge: a live Ministry API is used when credentials exist. Until then this records a simulated official search against your ArdhiSasa ID."}
-        </p>
+        <div className="rounded-[0.35rem] border-2 border-brass/40 bg-[var(--brass-soft,#f7f1e6)] px-4 py-3">
+          <p className="text-base font-semibold text-forest-deep">
+            {sw ? "Hali ya uthibitisho wa ArdhiSasa:" : "ArdhiSasa Verification Status:"}{" "}
+            <span className="text-brass">
+              {ardhisasaStatusLabel(
+                lookups[0]?.status || "pending_advocate_submission",
+                locale,
+              )}
+            </span>
+          </p>
+          <p className="mt-2 text-base text-muted">
+            {sw ? ARDHISASA_NOTICE_SW : ARDHISASA_NOTICE_EN}
+          </p>
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="field-label" htmlFor="lr">{sw ? "Nambari ya LR" : "Title / LR number"}</label>
-            <input id="lr" className="field" required value={titleNumber} onChange={(e) => setTitleNumber(e.target.value)} />
+          <div className="sm:col-span-2">
+            <label className="field-label" htmlFor="linkedLand">
+              {sw ? "Mali ya ardhi iliyohifadhiwa" : "Land asset already in the vault"}
+            </label>
+            <select
+              id="linkedLand"
+              className="field"
+              value={lookupAssetId}
+              onChange={(e) => {
+                const asset = assets.find((a) => a.id === e.target.value);
+                setLookupAssetId(e.target.value);
+                if (asset) {
+                  setTitleNumber(asset.titleNumber || "");
+                  setCounty(asset.county || "");
+                  setParcelNumber(asset.parcelNumber || "");
+                  setBlockNumber(asset.blockNumber || "");
+                  setRegistrationSection(asset.registrationSection || "");
+                  setLandRegistryOffice(asset.landRegistryOffice || "");
+                }
+              }}
+            >
+              <option value="">{sw ? "Ingiza kwa mkono" : "Enter identifiers manually"}</option>
+              {assets.filter((a) => isLandLike(a.type)).map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.title} ({a.titleNumber || a.parcelNumber || "no LR"})
+                </option>
+              ))}
+            </select>
           </div>
           <div>
-            <label className="field-label" htmlFor="cty">{sw ? "Kaunti" : "County registry"}</label>
-            <input id="cty" className="field" value={county} onChange={(e) => setCounty(e.target.value)} />
+            <label className="field-label" htmlFor="lr">{sw ? "Nambari ya hati / LR" : "Title / LR number"}</label>
+            <input id="lr" className="field" value={titleNumber} onChange={(e) => setTitleNumber(e.target.value)} />
+          </div>
+          <div>
+            <label className="field-label" htmlFor="parcel">{sw ? "Nambari ya kiwanja" : "Parcel number"}</label>
+            <input id="parcel" className="field" value={parcelNumber} onChange={(e) => setParcelNumber(e.target.value)} />
+          </div>
+          <div>
+            <label className="field-label" htmlFor="block">{sw ? "Nambari ya block" : "Parcel block number"}</label>
+            <input id="block" className="field" value={blockNumber} onChange={(e) => setBlockNumber(e.target.value)} />
+          </div>
+          <div>
+            <label className="field-label" htmlFor="section">{sw ? "Sehemu ya usajili" : "Registry section"}</label>
+            <input id="section" className="field" value={registrationSection} onChange={(e) => setRegistrationSection(e.target.value)} />
+          </div>
+          <div>
+            <label className="field-label" htmlFor="cty">{sw ? "Kaunti / ofisi ya ardhi" : "County / land registry"}</label>
+            <input
+              id="cty"
+              className="field"
+              value={landRegistryOffice || county}
+              onChange={(e) => {
+                setLandRegistryOffice(e.target.value);
+                setCounty(e.target.value);
+              }}
+            />
           </div>
         </div>
         <button type="submit" className="btn btn-secondary-dark">
-          {sw ? "Tafuta hati" : "Run title search"}
+          {sw ? "Omba wakili wa LSK awasilishe" : "Ask LSK advocate to file"}
         </button>
-        {lookups[0] && (
-          <p className="text-base text-ink">
-            Latest: {lookups[0].titleNumber} · {lookups[0].result.registrationStatus}
-            {lookups[0].result.caveats.length
-              ? ` · ${lookups[0].result.caveats.length} caveat(s)`
-              : ""}
-          </p>
+        {lookups.length > 0 && (
+          <ul className="space-y-3">
+            {lookups.map((lu) => (
+              <li key={lu.id} className="rounded-[0.35rem] border border-border px-4 py-3 text-base">
+                <p className="font-semibold text-forest-deep">
+                  {ardhisasaStatusLabel(lu.status, locale)}
+                </p>
+                <p className="text-ink">{lookupParcelSummary(lu)}</p>
+                {lu.documentPath ? (
+                  <a
+                    className="mt-1 inline-block font-semibold text-forest underline"
+                    href={`/api/secure-docs/view?kind=title_search&lookupId=${lu.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {sw ? "Fungua cheti rasmi" : "View official search certificate"}
+                  </a>
+                ) : (
+                  <p className="mt-1 text-sm text-muted">
+                    {sw
+                      ? "Cheti kitaonekana hapa baada ya wakili kupakia PDF kutoka ArdhiSasa."
+                      : "The official PDF will appear here after the advocate uploads it from ArdhiSasa."}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
         )}
       </form>
 

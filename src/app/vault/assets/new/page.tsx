@@ -380,13 +380,13 @@ export default function NewAssetPage() {
                 <fieldset className="rounded-[0.35rem] border-2 border-border p-4">
                   <legend className="px-2 text-base font-semibold text-forest-deep">
                     {sw
-                      ? "Utambulisho wa ArdhiSasa (si lazima)"
-                      : "ArdhiSasa parcel search (optional)"}
+                      ? "Utambulisho wa kiwanja (ArdhiSasa)"
+                      : "ArdhiSasa parcel identifiers"}
                   </legend>
                   <p className="text-base text-muted">
                     {sw
-                      ? "Nakili haya kutoka kwa hati miliki yako. Husaidia wakili kupata kiwanja haraka."
-                      : "Copy these from your title deed. They let your advocate find the parcel on the first search."}
+                      ? "Nakili haya kutoka kwa hati miliki yako. Wizara haitoi API ya umma — wakili wa LSK atawasilisha utafutaji kwenye akaunti yake ya kitaalamu."
+                      : "Copy these from your title deed. The Ministry has no public API — your LSK advocate files the search on their professional ArdhiSasa account."}
                   </p>
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <div>

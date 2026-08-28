@@ -111,8 +111,8 @@ export default function AdvocatesJoinLandingPage() {
             </li>
             <li>
               {sw
-                ? "Zana: checklist, ArdhiSasa lookup, muhuri wa kidijitali"
-                : "Tools: checklists, title lookup, digital seal"}
+                ? "Zana: checklist, uwasilishaji wa ArdhiSasa, muhuri wa kidijitali"
+                : "Tools: checklists, ArdhiSasa professional filing, digital seal"}
             </li>
           </ul>
         </section>

@@ -13,12 +13,17 @@ import {
   listBeneficiaries,
   listLegalDocuments,
   listReviewRequests,
+  listTitleLookups,
 } from "@/lib/db/store";
 import {
   freeAmendmentRemainingMs,
   isWithinFreeAmendmentWindow,
   vaultContentLocked,
 } from "@/lib/vault-lock";
+import {
+  ardhisasaStatusLabel,
+  lookupParcelSummary,
+} from "@/lib/land-registry/verification";
 
 export default async function VaultDashboardPage() {
   const session = await readSession();
@@ -52,6 +57,7 @@ export default async function VaultDashboardPage() {
     audit,
     legalDocs,
     testaments,
+    lookups,
   ] = await Promise.all([
     findUserById(vault.ownerId),
     listAssets(vault.id),
@@ -61,6 +67,7 @@ export default async function VaultDashboardPage() {
     listAudit(vault.id),
     listLegalDocuments(vault.id),
     listAudioTestaments(vault.id),
+    listTitleLookups(vault.id),
   ]);
 
   const lastSubmitAt =
@@ -305,7 +312,7 @@ export default async function VaultDashboardPage() {
           src="/landing/advocates.png"
           alt="Advocates reviewing papers in Nairobi"
           label="Diaspora bridge"
-          value="ArdhiSasa, video notary, USD/GBP/EUR"
+          value="IDs, advocate filing, video notary"
         />
         <PhotoCard
           href="/vault/governance"
@@ -413,6 +420,54 @@ export default async function VaultDashboardPage() {
                     File: {doc.documentName}
                   </div>
                 ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="rounded-[0.45rem] border-2 border-border bg-surface p-5 sm:p-7">
+        <h2 className="text-2xl font-semibold text-forest-deep">
+          ArdhiSasa search certificates
+        </h2>
+        {lookups.length === 0 ? (
+          <p className="mt-3 text-lg text-muted">
+            Ministry of Lands searches are filed by your LSK partner advocate.
+            Status starts as Pending Advocate Submission. Official PDFs appear
+            here after owner OTP consent on ArdhiSasa.
+          </p>
+        ) : (
+          <ul className="mt-4 space-y-3">
+            {lookups.map((lookup) => (
+              <li
+                key={lookup.id}
+                className="border-l-4 border-brass pl-3 text-base text-ink"
+              >
+                <span className="font-semibold">
+                  {ardhisasaStatusLabel(lookup.status)}
+                </span>
+                {lookupParcelSummary(lookup) ? (
+                  <>
+                    {" — "}
+                    {lookupParcelSummary(lookup)}
+                  </>
+                ) : null}
+                {lookup.documentPath ? (
+                  <div>
+                    <a
+                      className="font-semibold text-forest underline"
+                      href={`/api/secure-docs/view?kind=title_search&lookupId=${lookup.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      View official search PDF
+                    </a>
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted">
+                    Waiting for the advocate to upload the official ArdhiSasa PDF.
+                  </div>
+                )}
               </li>
             ))}
           </ul>

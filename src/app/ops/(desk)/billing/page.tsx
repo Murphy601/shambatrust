@@ -72,7 +72,7 @@ export default function OpsBillingPage() {
         <div>
           <h1 className="text-3xl font-semibold">Billing desk</h1>
           <p className="mt-2 text-[#9aa89c]">
-            Review / amendment / title-lookup events. Unpaid:{" "}
+            Review / amendment / ArdhiSasa filing events. Unpaid:{" "}
             <span className="font-semibold text-[#d4a574]">
               KES {unpaid.toLocaleString()}
             </span>

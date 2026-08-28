@@ -37,6 +37,7 @@ import {
 } from "@/lib/db/store";
 import { spokenLanguageLabel } from "@/lib/languages";
 import { registerBinderFonts } from "@/lib/binder/fonts";
+import { ardhisasaStatusLabel, lookupParcelSummary } from "@/lib/land-registry/verification";
 
 type Snapshot = {
   vault: Vault;
@@ -429,21 +430,21 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
       if (d.documentName) line("Certified upload", d.documentName);
     }
 
-    // Title lookups
-    h("8. Title lookups");
+    // ArdhiSasa filings
+    h("8. ArdhiSasa filings");
     if (snapshot.lookups.length === 0) {
-      doc.text("No title lookups recorded.");
+      doc.text("No Ministry of Lands filings recorded. Official searches require an LSK advocate's professional ArdhiSasa account and owner OTP consent.");
     }
     for (const lookup of snapshot.lookups) {
       doc.moveDown(0.3);
-      line("Title", lookup.titleNumber);
-      line(
-        "Result",
-        lookup.result
-          ? `${lookup.result.found ? "Found" : "Not found"} · ${lookup.result.registrationStatus}`
-          : "Pending",
-      );
-      if (lookup.result?.ownerName) line("Registry owner", lookup.result.ownerName);
+      line("Parcel", lookupParcelSummary(lookup) || "—");
+      line("Verification status", ardhisasaStatusLabel(lookup.status));
+      if (lookup.documentName) {
+        line("Official certificate", `${lookup.documentName} (on file in vault)`);
+      } else {
+        line("Official certificate", "Not yet uploaded");
+      }
+      if (lookup.advocateNotes) line("Advocate notes", lookup.advocateNotes);
     }
 
     // Voice testaments

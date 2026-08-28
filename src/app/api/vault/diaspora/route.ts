@@ -5,6 +5,7 @@ import {
   addAudit,
   findUserById,
   listActiveAdvocates,
+  listAssets,
   listConsultBookingsForVault,
   listPaymentCheckouts,
   listTitleLookups,
@@ -27,11 +28,12 @@ export async function GET() {
     return NextResponse.json({ error: access.error }, { status: access.status });
   }
   const owner = await findUserById(access.vault.ownerId);
-  const [advocates, bookings, checkouts, lookups] = await Promise.all([
+  const [advocates, bookings, checkouts, lookups, assets] = await Promise.all([
     listActiveAdvocates(),
     listConsultBookingsForVault(access.vault.id),
     listPaymentCheckouts(access.vault.id),
     listTitleLookups(access.vault.id),
+    listAssets(access.vault.id),
   ]);
   return NextResponse.json({
     asAgent: access.asAgent,
@@ -57,6 +59,7 @@ export async function GET() {
     bookings,
     checkouts,
     lookups,
+    assets,
   });
 }
 
