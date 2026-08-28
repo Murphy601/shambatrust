@@ -323,6 +323,10 @@ const faqs: Record<
         a: "Yes — Agent Mode lets a trusted family member help. Final review submission and sensitive changes still require your authorisation.",
       },
       {
+        q: "Can I talk instead of filling long forms?",
+        a: "Yes. In your vault, open Talk to Amani. Amani asks one simple question at a time in English or Kiswahili. You can speak, type, or photograph an ID or title deed. The usual Assets and Heirs pages still work if you prefer them.",
+      },
+      {
         q: "Are draft edits free?",
         a: "Yes. Saving assets, heirs, and allocations never bills you. You are charged when you intentionally submit for legal review (or open a paid amendment after the free 48-hour window).",
       },
@@ -379,6 +383,10 @@ const faqs: Record<
       {
         q: "Je, mwanangu anaweza kujaza fomu?",
         a: "Ndiyo — Hali ya Wakala inaruhusu msaada. Uwasilishaji wa mwisho unahitaji idhini yako.",
+      },
+      {
+        q: "Naweza kuongea badala ya kujaza fomu ndefu?",
+        a: "Ndiyo. Katika hifadhi yako, fungua Ongea na Amani. Amani anauliza swali moja rahisi kwa wakati kwa Kiingereza au Kiswahili. Unaweza kuzungumza, kuandika, au kupiga picha ya kitambulisho au hati miliki. Kurasa za Mali na Warithi bado zinapatikana.",
       },
       {
         q: "Gharama ni kiasi gani?",

@@ -7,6 +7,7 @@ import { vaultCopy } from "@/lib/vault-copy";
 
 const links = [
           { href: "/vault", key: "vault" as const },
+          { href: "/vault/intake", key: "intake" as const },
           { href: "/vault/assets", key: "assets" as const },
           { href: "/vault/heirs", key: "heirs" as const },
           { href: "/vault/houses", key: "houses" as const },

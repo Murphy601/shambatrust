@@ -13,6 +13,10 @@ type FaqItem = {
 const ITEMS: Record<"en" | "sw", FaqItem[]> = {
   en: [
     {
+      q: "Can I talk instead of filling long forms?",
+      a: "Yes. In your vault, open Talk to Amani. Amani asks one simple question at a time in English or Kiswahili. You can speak, type, or photograph an ID or title deed. The usual Assets and Heirs pages still work.",
+    },
+    {
       q: "Can my family dispute a digital title deed vault in court?",
       a: "The vault is evidence and a sealed plan — not a replacement for a court grant. A partner advocate uses your documents to file for Grant of Representation. A well-kept vault with an LSK-reviewed will makes disputes harder, not impossible.",
     },
@@ -37,6 +41,10 @@ const ITEMS: Record<"en" | "sw", FaqItem[]> = {
     },
   ],
   sw: [
+    {
+      q: "Naweza kuongea badala ya kujaza fomu ndefu?",
+      a: "Ndiyo. Katika hifadhi yako, fungua Ongea na Amani. Amani anauliza swali moja rahisi kwa wakati. Unaweza kuzungumza, kuandika, au kupiga picha ya kitambulisho au hati miliki.",
+    },
     {
       q: "Je, familia inaweza kupinga hifadhi ya hati miliki mahakamani?",
       a: "Hifadhi ni ushahidi na mpango uliofungwa — si badala ya amri ya mahakama. Wakili mshirika hutumia nyaraka zako kuomba Grant of Representation. Wosia uliokaguliwa na LSK hufanya mizozo kuwa ngumu, si kuizuia kabisa.",

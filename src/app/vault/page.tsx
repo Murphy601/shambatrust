@@ -271,6 +271,13 @@ export default async function VaultDashboardPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <PhotoCard
+          href="/vault/intake"
+          src="/landing/how-it-works.png"
+          alt="Elder speaking into a phone while a family helper listens"
+          label="Talk to Amani"
+          value="Voice + photo, one question at a time"
+        />
+        <PhotoCard
           href="/vault/assets"
           src="/landing/title-verify.png"
           alt="Title deed and boundary marker on Kenyan land"

@@ -3469,6 +3469,22 @@ export async function updateUserDiasporaProfile(
   return user;
 }
 
+export async function updateElderIdentity(input: {
+  userId: string;
+  fullName?: string;
+  nationalId?: string;
+}): Promise<User | null> {
+  const db = await readDb();
+  const user = db.users.find((u) => u.id === input.userId);
+  if (!user) return null;
+  const name = input.fullName?.trim();
+  if (name && name.length >= 2) user.fullName = name;
+  const nationalId = input.nationalId?.trim();
+  if (nationalId) user.diasporaNationalId = nationalId;
+  await writeDb(db);
+  return user;
+}
+
 export async function listHouseholdHouses(
   vaultId: string,
 ): Promise<HouseholdHouse[]> {
