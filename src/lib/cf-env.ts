@@ -22,6 +22,7 @@ type R2Like = {
 export type WorkerEnv = {
   DB?: D1Like;
   UPLOADS?: R2Like;
+  GROQ_API_KEY?: string;
 };
 
 /** Worker bindings. Empty during `next build` / when no request context exists. */

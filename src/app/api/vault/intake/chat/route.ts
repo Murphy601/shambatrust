@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireVaultAccess } from "@/lib/vault-access";
 import { vaultContentLocked } from "@/lib/vault-lock";
 import { findUserById, listAssets, listBeneficiaries } from "@/lib/db/store";
-import { detectSwahili, mergeIntakeDraft, parseOcrText, sanitizeDraft } from "@/lib/intake/extract";
+import { detectSwahili, mergeIntakeDraft, parseOcrText, parseUtterance, sanitizeDraft } from "@/lib/intake/extract";
 import { getGroqApiKey, groqIntakeTurn } from "@/lib/intake/groq";
 import { seedIntakeDraft } from "@/lib/intake/seed";
 import {
@@ -79,28 +79,25 @@ export async function POST(request: Request) {
     .reverse()
     .find((m) => m.role === "user");
   const utterance = lastUser?.content || "";
+  const spokenLocale = detectSwahili(utterance) ? "sw" : locale;
   let draft = sanitizeDraft(parsed.data.draft);
   if (parsed.data.ocrText) {
     draft = mergeIntakeDraft(draft, parseOcrText(parsed.data.ocrText));
   }
-
-  const guided = guidedTurn({
-    draft,
-    utterance,
-    ocrText: parsed.data.ocrText,
-    locale: detectSwahili(utterance) ? "sw" : locale,
-  });
+  if (utterance.trim()) {
+    draft = mergeIntakeDraft(draft, parseUtterance(utterance, draft));
+  }
 
   const apiKey = await getGroqApiKey();
   if (apiKey) {
     const groq = await groqIntakeTurn({
-      draft: guided.draft,
+      draft,
       messages: parsed.data.messages as IntakeChatMessage[],
-      locale: detectSwahili(utterance) ? "sw" : locale,
+      locale: spokenLocale,
       apiKey,
     });
     if (groq) {
-      const merged = mergeIntakeDraft(guided.draft, groq.draftPatch);
+      const merged = mergeIntakeDraft(draft, groq.draftPatch, { overwrite: true });
       return NextResponse.json({
         reply: groq.reply,
         draft: merged,
@@ -111,5 +108,12 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json(guided);
+  return NextResponse.json(
+    guidedTurn({
+      draft,
+      utterance,
+      ocrText: parsed.data.ocrText,
+      locale: spokenLocale,
+    }),
+  );
 }

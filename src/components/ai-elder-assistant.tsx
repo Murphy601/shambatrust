@@ -73,7 +73,7 @@ export function AIElderAssistant() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
-  const [hearAmani, setHearAmani] = useState(true);
+  const [hearAmani, setHearAmani] = useState(false);
   const [locked, setLocked] = useState(false);
   const [asAgent, setAsAgent] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,10 +83,21 @@ export function AIElderAssistant() {
   const [micSupported] = useState(() => Boolean(speechCtor()));
   const recRef = useRef<InstanceType<SpeechCtor> | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const draftRef = useRef(draft);
+  const messagesRef = useRef(messages);
+  const wantListenRef = useRef(false);
+  const transcriptRef = useRef("");
+
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   const speakIfNeeded = useCallback(
     (text: string) => {
-      if (hearAmani) speakText(text, locale);
+      if (hearAmani && !wantListenRef.current) speakText(text, locale);
     },
     [hearAmani, locale],
   );
@@ -115,6 +126,7 @@ export function AIElderAssistant() {
       }
     })();
     return () => {
+      wantListenRef.current = false;
       recRef.current?.abort();
       if (typeof window !== "undefined") window.speechSynthesis?.cancel();
     };
@@ -134,10 +146,12 @@ export function AIElderAssistant() {
       return;
     }
     const nextMessages: IntakeChatMessage[] = trimmed
-      ? [...messages, { role: "user", content: trimmed }]
-      : messages;
+      ? [...messagesRef.current, { role: "user", content: trimmed }]
+      : messagesRef.current;
     setMessages(nextMessages);
+    messagesRef.current = nextMessages;
     setInput("");
+    transcriptRef.current = "";
     setBusy(true);
     setError(null);
     try {
@@ -146,7 +160,7 @@ export function AIElderAssistant() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: nextMessages,
-          draft,
+          draft: draftRef.current,
           locale,
           ocrText,
         }),
@@ -156,12 +170,20 @@ export function AIElderAssistant() {
         setError(json.error || "Amani could not reply.");
         return;
       }
-      if (json.draft) setDraft(json.draft);
+      if (json.draft) {
+        setDraft(json.draft);
+        draftRef.current = json.draft;
+      }
       if (json.step) setStep(json.step);
       setReadyToSubmit(Boolean(json.readyToSubmit) || json.step === 5);
       const reply = String(json.reply || "");
       if (reply) {
-        setMessages([...nextMessages, { role: "assistant", content: reply }]);
+        const withReply: IntakeChatMessage[] = [
+          ...nextMessages,
+          { role: "assistant", content: reply },
+        ];
+        setMessages(withReply);
+        messagesRef.current = withReply;
         speakIfNeeded(reply);
       }
     } catch {
@@ -171,7 +193,18 @@ export function AIElderAssistant() {
     }
   }
 
-  function toggleMic() {
+  function stopListening() {
+    wantListenRef.current = false;
+    try {
+      recRef.current?.stop();
+    } catch {
+      /* already stopped */
+    }
+    recRef.current = null;
+    setListening(false);
+  }
+
+  function startListening() {
     const Ctor = speechCtor();
     if (!Ctor) {
       setError(
@@ -181,33 +214,62 @@ export function AIElderAssistant() {
       );
       return;
     }
-    if (listening) {
-      recRef.current?.stop();
-      setListening(false);
+    if (typeof window !== "undefined") window.speechSynthesis?.cancel();
+    setError(null);
+    transcriptRef.current = "";
+    wantListenRef.current = true;
+    setListening(true);
+
+    const begin = () => {
+      if (!wantListenRef.current) return;
+      const rec = new Ctor();
+      rec.lang = locale === "sw" ? "sw-KE" : "en-KE";
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.onresult = (ev) => {
+        let text = "";
+        for (let i = 0; i < ev.results.length; i += 1) {
+          text += ev.results[i]?.[0]?.transcript || "";
+        }
+        transcriptRef.current = text.trim();
+        setInput(transcriptRef.current);
+      };
+      rec.onerror = (ev) => {
+        if (ev.error === "not-allowed") {
+          wantListenRef.current = false;
+          setListening(false);
+          setError(
+            sw
+              ? "Ruhusu maikrofoni kwenye kivinjari, kisha jaribu tena."
+              : "Allow the microphone in your browser, then try again.",
+          );
+        }
+      };
+      rec.onend = () => {
+        if (wantListenRef.current) {
+          try {
+            begin();
+          } catch {
+            window.setTimeout(begin, 250);
+          }
+        } else {
+          setListening(false);
+        }
+      };
+      recRef.current = rec;
+      rec.start();
+    };
+    begin();
+  }
+
+  function toggleMic() {
+    if (listening || wantListenRef.current) {
+      const spoken = (transcriptRef.current || input).trim();
+      stopListening();
+      if (spoken) void sendTurn(spoken);
       return;
     }
-    const rec = new Ctor();
-    rec.lang = locale === "sw" ? "sw-KE" : "en-KE";
-    rec.continuous = false;
-    rec.interimResults = false;
-    rec.onresult = (ev) => {
-      const transcript = ev.results[0]?.[0]?.transcript || "";
-      if (transcript.trim()) void sendTurn(transcript.trim());
-    };
-    rec.onerror = (ev) => {
-      if (ev.error === "not-allowed") {
-        setError(
-          sw
-            ? "Ruhusu maikrofoni kwenye kivinjari, kisha jaribu tena."
-            : "Allow the microphone in your browser, then try again.",
-        );
-      }
-      setListening(false);
-    };
-    rec.onend = () => setListening(false);
-    recRef.current = rec;
-    rec.start();
-    setListening(true);
+    startListening();
   }
 
   async function onPhoto(file: File | undefined) {
@@ -378,6 +440,7 @@ export function AIElderAssistant() {
             className="mt-4 space-y-3"
             onSubmit={(event) => {
               event.preventDefault();
+              stopListening();
               void sendTurn(input);
             }}
           >
@@ -388,14 +451,30 @@ export function AIElderAssistant() {
               id="amani-answer"
               className="min-h-24 w-full rounded-[0.35rem] border-2 border-border p-3 text-lg"
               value={input}
-              onChange={(event) => setInput(event.target.value)}
+              onChange={(event) => {
+                setInput(event.target.value);
+                transcriptRef.current = event.target.value;
+              }}
               placeholder={
-                sw
-                  ? "Andika hapa, au bonyeza mikrofoni"
-                  : "Type here, or tap the microphone"
+                listening
+                  ? sw
+                    ? "Endelea kuzungumza… bonyeza Nimeimaliza ukimaliza"
+                    : "Keep speaking… tap I’m done when you finish"
+                  : sw
+                    ? "Andika hapa, au bonyeza mikrofoni"
+                    : "Type here, or tap the microphone"
               }
               disabled={busy || locked}
             />
+            <p className="text-base text-muted">
+              {listening
+                ? sw
+                  ? "Amani anasubiri. Ongea mpaka umalize, kisha bonyeza Nimeimaliza. Hatutakatiza katikati."
+                  : "Amani is waiting. Speak until you finish, then tap I’m done. We will not cut you off mid-sentence."
+                : sw
+                  ? "Bonyeza Sema jibu, ongea taratibu, kisha Nimeimaliza. Amani anajibu baada tu ya hapo."
+                  : "Tap Speak Answer, talk at your own pace, then I’m done. Amani replies only after that."}
+            </p>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -409,8 +488,8 @@ export function AIElderAssistant() {
               >
                 {listening
                   ? sw
-                    ? "⏹ Simamisha"
-                    : "⏹ Stop"
+                    ? "⏹ Nimeimaliza"
+                    : "⏹ I’m done"
                   : sw
                     ? "🎤 Sema jibu"
                     : "🎤 Speak Answer"}
@@ -444,7 +523,9 @@ export function AIElderAssistant() {
                 checked={hearAmani}
                 onChange={(event) => setHearAmani(event.target.checked)}
               />
-              {sw ? "Sikiliza Amani" : "Hear Amani"}
+              {sw
+                ? "Soma jibu la Amani kwa sauti (zimia kama inakatiza unapoongea)"
+                : "Read Amani’s replies aloud (turn off if it talks over you)"}
             </label>
           </form>
           {ocrStatus && <p className="mt-3 text-base text-forest">{ocrStatus}</p>}

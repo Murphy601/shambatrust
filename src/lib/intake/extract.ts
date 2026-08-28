@@ -164,9 +164,11 @@ export function parseUtterance(
 export function mergeIntakeDraft(
   base: IntakeDraft,
   patch: Partial<IntakeDraft> | null | undefined,
+  options?: { overwrite?: boolean },
 ): IntakeDraft {
   const next: IntakeDraft = { ...base, heirs: [...base.heirs] };
   if (!patch) return next;
+  const overwrite = Boolean(options?.overwrite);
   const keys: Array<keyof IntakeDraft> = [
     "fullName",
     "nationalId",
@@ -193,7 +195,7 @@ export function mergeIntakeDraft(
     if (!trimmed) continue;
     if (looksLikeSkip(trimmed)) continue;
     const current = next[key];
-    if (typeof current === "string" && current.trim()) continue;
+    if (!overwrite && typeof current === "string" && current.trim()) continue;
     (next[key] as string) = trimmed;
   }
   if (Array.isArray(patch.heirs)) {
