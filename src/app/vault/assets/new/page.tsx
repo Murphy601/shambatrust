@@ -385,8 +385,8 @@ export default function NewAssetPage() {
                   </legend>
                   <p className="text-base text-muted">
                     {sw
-                      ? "Nakili haya kutoka kwa hati miliki yako. Wizara haitoi API ya umma — wakili wa LSK atawasilisha utafutaji kwenye akaunti yake ya kitaalamu."
-                      : "Copy these from your title deed. The Ministry has no public API — your LSK advocate files the search on their professional ArdhiSasa account."}
+                      ? "Nakili haya kutoka kwa hati miliki yako. Wakili wa LSK atawasilisha utafutaji kwenye akaunti yake ya kitaalamu ya ArdhiSasa."
+                      : "Copy these from your title deed. Your LSK advocate files the search on their professional ArdhiSasa account."}
                   </p>
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <div>

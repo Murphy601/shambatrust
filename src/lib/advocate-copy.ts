@@ -45,7 +45,7 @@ const copy = {
     titleLookup: "ArdhiSasa professional filing",
     runLookup: "Open filing for LSK advocate",
     lookupHint:
-      "ArdhiSasa has no public API. Log into your official professional account, file the search, wait for the registered owner's OTP consent, then upload the official digital search PDF into this vault.",
+      "Log into your official professional account, file the search, wait for the registered owner's OTP consent, then upload the official digital search PDF into this vault.",
     markFiled: "Mark filed — awaiting owner OTP consent",
     uploadCert: "Upload official search PDF",
     withdrawFiling: "Withdraw filing",
@@ -111,7 +111,7 @@ const copy = {
     titleLookup: "Uwasilishaji wa kitaalamu wa ArdhiSasa",
     runLookup: "Fungua ombi kwa wakili wa LSK",
     lookupHint:
-      "ArdhiSasa haina API ya umma. Ingia kwenye akaunti yako rasmi ya kitaalamu, wasilisha utafutaji, subiri OTP ya mmiliki, kisha pakia PDF rasmi kwenye hifadhi hii.",
+      "Ingia kwenye akaunti yako rasmi ya kitaalamu, wasilisha utafutaji, subiri OTP ya mmiliki, kisha pakia PDF rasmi kwenye hifadhi hii.",
     markFiled: "Weka kuwa imewasilishwa — inasubiri OTP ya mmiliki",
     uploadCert: "Pakia PDF rasmi ya utafutaji",
     withdrawFiling: "Ondoa ombi",

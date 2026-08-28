@@ -25,7 +25,7 @@ export function pendingSearchResult(): TitleLookupResult {
     caveats: [],
     checkedAt,
     rawNote:
-      "No Ministry API. An LSK advocate must file this search on ArdhiSasa and obtain the registered owner's OTP consent.",
+      "An LSK advocate must file this search on ArdhiSasa and obtain the registered owner's OTP consent.",
   };
 }
 

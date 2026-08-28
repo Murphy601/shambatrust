@@ -42,7 +42,7 @@ export default function OpsTitleLookupsPage() {
       <div>
         <h1 className="text-3xl font-semibold">ArdhiSasa filing ledger</h1>
         <p className="mt-2 text-[#9aa89c]">
-          Advocate-filed Ministry searches (no public API). Total billed:{" "}
+          Advocate-filed Ministry searches. Total billed:{" "}
           <span className="font-semibold text-[#d4a574]">
             KES {totalKes.toLocaleString()}
           </span>

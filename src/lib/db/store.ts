@@ -1424,7 +1424,7 @@ export async function updateTitleLookup(input: {
       found: true,
       registrationStatus: "certificate_on_file",
       rawNote:
-        "Official ArdhiSasa search certificate uploaded to the vault. This is not a live registry query.",
+        "Official ArdhiSasa search certificate uploaded to the vault.",
       checkedAt: now,
     };
   }

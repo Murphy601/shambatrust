@@ -52,7 +52,7 @@ const terms: Record<Locale, LegalDoc> = {
       {
         heading: "6. No guarantees of land outcomes",
         body: [
-          "We do not guarantee Ministry of Lands outcomes, absence of caveats, or that courts will uphold any plan. ShambaTrust cannot query ArdhiSasa automatically — the Ministry does not provide a public third-party API. Official searches require an LSK partner advocate to file on their professional account and the registered owner's OTP consent. Always rely on the official search PDF stored in the vault and advocate advice for high-stakes decisions.",
+          "We do not guarantee Ministry of Lands outcomes, absence of caveats, or that courts will uphold any plan. Official searches are filed by an LSK partner advocate on their professional ArdhiSasa account, and the registered owner must consent by OTP. Always rely on the official search PDF stored in the vault and advocate advice for high-stakes decisions.",
         ],
       },
       {

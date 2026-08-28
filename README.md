@@ -56,7 +56,7 @@ Both are CSS scroll-snap tracks, so touch, trackpad, keyboard and
 
 ### Specialised data fields
 
-- **ArdhiSasa parcel identifiers** — title/LR, parcel number, block number, registration section, county land registry office, and ArdhiSasa account ID. There is no live Ministry API; an LSK advocate files the search and uploads the official PDF.
+- **ArdhiSasa parcel identifiers** — title/LR, parcel number, block number, registration section, county land registry office, and ArdhiSasa account ID. An LSK advocate files the search and uploads the official PDF.
 - **SACCO / M-Pesa** — a `sacco` asset type with SACCO name, member ID, linked M-Pesa number, and nominee percentages that must total 100% (SACCO bylaws pay nominees outside the estate)
 - **Language preference** — mother tongue for audio-guided forms, separate from the English/Kiswahili UI toggle
 
