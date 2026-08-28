@@ -33,8 +33,9 @@ export default function OpsDocumentsPage() {
       <div>
         <h1 className="text-3xl font-semibold">Documents</h1>
         <p className="mt-2 text-[#9aa89c]">
-          Every file from signup onward, grouped for ops. Views and downloads
-          are written to the activity log.
+          Document Vault is every file. Master Dossiers open the same enriched
+          case record used after seal — identity, GPS, heirs, allocations, will /
+          trust / burial drafts, voice transcripts, and the printable binder.
         </p>
       </div>
 
@@ -188,6 +189,39 @@ export default function OpsDocumentsPage() {
                       {row.opsNotes}
                     </p>
                   ) : null}
+                  <ul className="mt-3 grid gap-1 text-sm sm:grid-cols-2">
+                    {[
+                      ["National ID", row.idOnFile],
+                      ["Will builder draft", row.willDraft],
+                      ["Family trust draft", row.trustDraft],
+                      ["Burial wishes", row.burialWishes],
+                      [
+                        `${row.gpsPinned} GPS pin${row.gpsPinned === 1 ? "" : "s"}`,
+                        row.gpsPinned > 0,
+                      ],
+                      [
+                        `${row.testamentCount} voice testament${row.testamentCount === 1 ? "" : "s"}`,
+                        row.testamentCount > 0,
+                      ],
+                      [
+                        `${row.allocationCount} allocation${row.allocationCount === 1 ? "" : "s"}`,
+                        row.allocationCount > 0,
+                      ],
+                      [
+                        row.disputeCount
+                          ? `${row.disputeCount} caveat / family alert`
+                          : "No caveats",
+                        row.disputeCount === 0,
+                      ],
+                    ].map(([label, done]) => (
+                      <li
+                        key={String(label)}
+                        className={done ? "text-[#86efac]" : "text-[#9aa89c]"}
+                      >
+                        {done ? "●" : "○"} {label}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {row.inspectUrl && (
@@ -195,7 +229,7 @@ export default function OpsDocumentsPage() {
                       href={row.inspectUrl}
                       className="rounded border border-[#3d4a40] px-3 py-2 text-sm font-semibold hover:border-[#d4a574]"
                     >
-                      Open vault
+                      Open full dossier
                     </Link>
                   )}
                   {row.latestBinderId && row.latestBinderStatus === "ready" ? (

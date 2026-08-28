@@ -1,6 +1,7 @@
 import {
   getLatestVaultBinder,
   listAssets,
+  listAllocations,
   listAudioTestaments,
   listBeneficiaries,
   listEldersNewestFirst,
@@ -43,6 +44,13 @@ export type OpsDossierRow = {
   opsNotes: string;
   reviewNotes: string;
   familyNote: string;
+  willDraft: boolean;
+  trustDraft: boolean;
+  burialWishes: boolean;
+  gpsPinned: number;
+  disputeCount: number;
+  testamentCount: number;
+  allocationCount: number;
 };
 
 export async function listOpsDocumentIndex(query = ""): Promise<{
@@ -93,13 +101,14 @@ export async function listOpsDocumentIndex(query = ""): Promise<{
     };
 
     if (vault) {
-      const [assets, legalDocs, reviews, binders, testaments, heirs] = await Promise.all([
+      const [assets, legalDocs, reviews, binders, testaments, heirs, allocations] = await Promise.all([
         listAssets(vault.id),
         listLegalDocuments(vault.id),
         listReviewRequests(vault.id),
         listVaultBinders(vault.id),
         listAudioTestaments(vault.id),
         listBeneficiaries(vault.id),
+        listAllocations(vault.id),
       ]);
       const reviewId = [...reviews].sort((a, b) =>
         b.createdAt.localeCompare(a.createdAt),
@@ -226,6 +235,13 @@ export async function listOpsDocumentIndex(query = ""): Promise<{
           heirs
             .map((heir) => `${heir.fullName} (${heir.relationship || "heir"})`)
             .join("; ") || "No heirs named",
+        willDraft: Boolean(vault.willDraft),
+        trustDraft: Boolean(vault.trustDraft),
+        burialWishes: Boolean(vault.burialWishes),
+        gpsPinned: assets.filter((a) => a.gpsLat != null && a.gpsLng != null).length,
+        disputeCount: assets.filter((a) => a.disputeFlag || a.familyAlert).length,
+        testamentCount: testaments.length,
+        allocationCount: allocations.length,
       });
     } else if (matchesQuery(searchHay)) {
       files.push(...pending);
@@ -248,6 +264,13 @@ export async function listOpsDocumentIndex(query = ""): Promise<{
         opsNotes: "",
         reviewNotes: "",
         familyNote: "No heirs named",
+        willDraft: false,
+        trustDraft: false,
+        burialWishes: false,
+        gpsPinned: 0,
+        disputeCount: 0,
+        testamentCount: 0,
+        allocationCount: 0,
       });
     }
   }

@@ -216,6 +216,13 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
         }
       }
       if (asset.notes) line("Notes", asset.notes);
+      if (asset.disputeFlag || asset.familyAlert) {
+        line(
+          "Protection flag",
+          asset.disputeFlag ? "Active dispute / caveat" : "Family unauthorized-sale alert",
+        );
+        if (asset.disputeNotes) line("Alert notes", asset.disputeNotes);
+      }
       if (asset.documentName) line("Attached deed", asset.documentName);
     }
 
@@ -253,6 +260,51 @@ function writeNarrativePdf(snapshot: Snapshot, imageAttachments: Attachment[]): 
           (alloc.percentage != null ? ` (${alloc.percentage}%)` : "") +
           (alloc.specificGift ? ` — ${alloc.specificGift}` : ""),
       );
+    }
+
+    h("4b. Will, trust & burial drafts");
+    if (snapshot.vault.willDraft) {
+      const will = snapshot.vault.willDraft;
+      doc.font(fonts.bold).text("Will builder");
+      doc.font(fonts.regular);
+      line("Testator", will.testatorName);
+      line("ID", will.testatorId);
+      line("Residence", will.primaryResidence);
+      line("Executor", `${will.executorName} ${will.executorPhone}`.trim());
+      line("Alt executor", `${will.altExecutorName} ${will.altExecutorPhone}`.trim());
+      line("Guardian", `${will.guardianName} ${will.guardianPhone}`.trim());
+      line(
+        "Section 11 witnesses",
+        will.witnessAcknowledged ? "Acknowledged" : "Not yet acknowledged",
+      );
+      if (will.notes) line("Notes", will.notes);
+    } else {
+      doc.text("No will builder draft.");
+    }
+    doc.moveDown(0.4);
+    if (snapshot.vault.trustDraft) {
+      const trust = snapshot.vault.trustDraft;
+      doc.font(fonts.bold).text("Family land trust");
+      doc.font(fonts.regular);
+      line("Trust name", trust.trustName);
+      line("Primary trustee", trust.primaryTrustee);
+      line("Co-trustee", trust.coTrustee);
+      line("Title numbers", trust.titleNumbers);
+      if (trust.conditions) line("Conditions", trust.conditions);
+    } else {
+      doc.text("No family trust draft.");
+    }
+    doc.moveDown(0.4);
+    if (snapshot.vault.burialWishes) {
+      const wishes = snapshot.vault.burialWishes;
+      doc.font(fonts.bold).text("Burial wishes");
+      doc.font(fonts.regular);
+      line("Location", wishes.burialLocation);
+      line("Details", wishes.burialDetails);
+      line("Committee", `${wishes.committeeLead1} / ${wishes.committeeLead2}`.trim());
+      if (wishes.specialMessage) line("Message", wishes.specialMessage);
+    } else {
+      doc.text("No burial wishes recorded.");
     }
 
     // Execution
